@@ -983,17 +983,20 @@ showMFsub(const std::string&   mySet,
 
     FArrayBox sub(box,mf.nComp());
 
-    mf.copyTo(sub,0,0,mf.nComp(),mf.nGrow());
+    mf.copyTo(sub,0,0,mf.nComp(),0);
 
     if (ShowMF_Check_Nans)
     {
       BL_ASSERT(!sub.contains_nan(box,0,mf.nComp()));
     }
-    std::ofstream os;
-    os.open(junkname.c_str());
-    sub.writeOn(os);
-    os.close();
-    FArrayBox::setFormat(saved_format);
+//    std::ofstream os;
+//    os.open(junkname.c_str());
+//    sub.writeOn(os);
+//    os.close();
+//    FArrayBox::setFormat(saved_format);
+    std::ofstream ofs(junkname.c_str(),std::ofstream::out);                                                                                                                        
+    amrex::Print(ofs) << sub << std::endl;                                                                                                                                         
+    ofs.close();
   }
 }
 
