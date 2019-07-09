@@ -929,5 +929,197 @@ contains
 
   end subroutine press_fill
 
+#ifdef USE_EFIELD  
+! ::: -----------------------------------------------------------
+! ::: This routine is called during a filpatch operation when
+! ::: the patch to be filled falls outside the interior
+! ::: of the problem domain.  You are requested to supply the
+! ::: data outside the problem interior in such a way that the
+! ::: data is consistant with the types of the boundary conditions
+! ::: you specified in the C++ code.
+! :::
+! ::: NOTE:  you can assume all interior cells have been filled
+! :::        with valid data.
+! :::
+! ::: INPUTS/OUTPUTS:
+! :::
+! ::: ne_ar     <= ne array
+! ::: lo,hi     => index extent of adv array
+! ::: domlo,hi  => index extent of problem domain
+! ::: delta     => cell spacing
+! ::: xlo       => physical location of lower left hand
+! :::              corner of temperature array
+! ::: time      => problem evolution time
+! ::: bc        => array of boundary flags bc(BL_SPACEDIM,lo:hi)
+! ::: -----------------------------------------------------------
+
+  SUBROUTINE ne_fill ( ne_ar, DIMS(ne_ar), domlo, domhi, delta, &
+                       xlo, time, bc ) bind(C, name="ne_fill")
+
+      use mod_Fvar_def, only : dim, maxspec, domnlo
+
+      implicit none
+
+      integer DIMDEC(ne_ar), bc(dim,2)
+      integer domlo(dim), domhi(dim)
+      REAL_T  delta(dim), xlo(dim), time
+      REAL_T  ne_ar(DIMV(ne_ar))
+
+      integer i, j
+      REAL_T  y, x
+      REAL_T  u, v, rho, Yl(0:maxspec-1), T, h, ne_bc, phiv_bc
+
+      integer lo(dim), hi(dim)
+
+      lo(1) = ARG_L1(ne_ar)
+      lo(2) = ARG_L2(ne_ar)
+      hi(1) = ARG_H1(ne_ar)
+      hi(2) = ARG_H2(ne_ar)
+
+      call filcc (ne_ar,DIMS(ne_ar),domlo,domhi,delta,xlo,bc)
+
+      if (bc(1,1).eq.EXT_DIR.and.lo(1).lt.domlo(1)) then
+         do i = lo(1), domlo(1)-1
+            x = (float(i)+.5)*delta(1)+domnlo(1)
+            do j = lo(2), hi(2)
+               y = (float(j)+.5)*delta(2)+domnlo(2)
+               call bcfunction_efield(x,y,1, 1, time,u,v,rho,Yl,T,h,ne_bc,phiV_bc,delta,.false.)
+               ne_ar(i,j) = ne_bc
+            enddo
+         enddo
+      endif
+      
+      if (bc(1,2).eq.EXT_DIR.and.hi(1).gt.domhi(1)) then
+         do i = domhi(1)+1, hi(1)
+            x = (float(i)+.5)*delta(1)+domnlo(1)
+            do j = lo(2), hi(2)
+               y = (float(j)+.5)*delta(2)+domnlo(2)
+               call bcfunction_efield(x,y,1, -1, time,u,v,rho,Yl,T,h,ne_bc,phiV_bc,delta,.false.)
+               ne_ar(i,j) = ne_bc
+            enddo
+         enddo
+      endif    
+
+      if (bc(2,1).eq.EXT_DIR.and.lo(2).lt.domlo(2)) then
+         do j = lo(2), domlo(2)-1
+            y = (float(j)+.5)*delta(2)+domnlo(2)
+            do i = lo(1), hi(1)
+               x = (float(i)+.5)*delta(1)+domnlo(1)
+               call bcfunction_efield(x,y,2, 1, time,u,v,rho,Yl,T,h,ne_bc,phiV_bc,delta,.false.)
+               ne_ar(i,j) = ne_bc
+            enddo
+         enddo
+      endif    
+      
+      if (bc(2,2).eq.EXT_DIR.and.hi(2).gt.domhi(2)) then
+         do j = domhi(2)+1, hi(2)
+            y = (float(j)+.5)*delta(2)+domnlo(2)
+            do i = lo(1), hi(1)
+               x = (float(i)+.5)*delta(1)+domnlo(1)
+               call bcfunction_efield(x,y,2, -1, time,u,v,rho,Yl,T,h,ne_bc,phiV_bc,delta,.false.)
+               ne_ar(i,j) = ne_bc
+            enddo
+         enddo
+      endif
+
+  END SUBROUTINE ne_fill
+
+! ::: -----------------------------------------------------------
+! ::: This routine is called during a filpatch operation when
+! ::: the patch to be filled falls outside the interior
+! ::: of the problem domain.  You are requested to supply the
+! ::: data outside the problem interior in such a way that the
+! ::: data is consistant with the types of the boundary conditions
+! ::: you specified in the C++ code.
+! :::
+! ::: NOTE:  you can assume all interior cells have been filled
+! :::        with valid data.
+! :::
+! ::: INPUTS/OUTPUTS:
+! :::
+! ::: phiV_ar   <= phiV array
+! ::: lo,hi     => index extent of adv array
+! ::: domlo,hi  => index extent of problem domain
+! ::: delta     => cell spacing
+! ::: xlo       => physical location of lower left hand
+! :::              corner of temperature array
+! ::: time      => problem evolution time
+! ::: bc        => array of boundary flags bc(BL_SPACEDIM,lo:hi)
+! ::: -----------------------------------------------------------
+
+  SUBROUTINE phiv_fill ( phiV_ar, DIMS(phiV_ar), domlo, domhi, delta, &
+                       xlo, time, bc ) bind(C, name="phiv_fill")
+
+      use mod_Fvar_def, only : dim, maxspec, domnlo
+      use user_defined_fcts_2d_module, only : bcfunction_efield
+
+      implicit none
+
+      integer DIMDEC(phiV_ar), bc(dim,2)
+      integer domlo(dim), domhi(dim)
+      REAL_T  delta(dim), xlo(dim), time
+      REAL_T  phiV_ar(DIMV(phiV_ar))
+
+      integer i, j
+      REAL_T  y, x
+      REAL_T  u, v, rho, Yl(0:maxspec-1), T, h, ne_bc, phiV_bc
+
+      integer lo(dim), hi(dim)
+
+      lo(1) = ARG_L1(phiV_ar)
+      lo(2) = ARG_L2(phiV_ar)
+      hi(1) = ARG_H1(phiV_ar)
+      hi(2) = ARG_H2(phiV_ar)
+
+      call filcc (phiV_ar,DIMS(phiV_ar),domlo,domhi,delta,xlo,bc)
+
+
+!     x low      
+      if (bc(1,1).eq.EXT_DIR.and.lo(1).lt.domlo(1)) then
+         do i = lo(1), domlo(1)-1
+            x = (float(i)+.5)*delta(1)+domnlo(1)
+            do j = lo(2), hi(2)
+               y = (float(j)+.5)*delta(2)+domnlo(2)
+               call bcfunction_efield(x,y,1, 1, time,u,v,rho,Yl,T,h,ne_bc,phiV_bc,delta,.false.)
+               phiV_ar(i,j) = phiV_bc
+            enddo
+         enddo
+      endif
+      
+      if (bc(1,2).eq.EXT_DIR.and.hi(1).gt.domhi(1)) then
+         do i = domhi(1)+1, hi(1)
+            x = (float(i)+.5)*delta(1)+domnlo(1)
+            do j = lo(2), hi(2)
+               y = (float(j)+.5)*delta(2)+domnlo(2)
+               call bcfunction_efield(x,y,1, -1, time,u,v,rho,Yl,T,h,ne_bc,phiV_bc,delta,.false.)
+               phiV_ar(i,j) = phiV_bc
+            enddo
+         enddo
+      endif    
+
+      if (bc(2,1).eq.EXT_DIR.and.lo(2).lt.domlo(2)) then
+         do j = lo(2), domlo(2)-1
+            y = (float(j)+.5)*delta(2)+domnlo(2)
+            do i = lo(1), hi(1)
+               x = (float(i)+.5)*delta(1)+domnlo(1)
+               call bcfunction_efield(x,y,2, 1, time,u,v,rho,Yl,T,h,ne_bc,phiV_bc,delta,.false.)
+               phiV_ar(i,j) = phiV_bc
+            enddo
+         enddo
+      endif    
+      
+      if (bc(2,2).eq.EXT_DIR.and.hi(2).gt.domhi(2)) then
+         do j = domhi(2)+1, hi(2)
+            y = (float(j)+.5)*delta(2)+domnlo(2)
+            do i = lo(1), hi(1)
+               x = (float(i)+.5)*delta(1)+domnlo(1)
+               call bcfunction_efield(x,y,2, -1, time,u,v,rho,Yl,T,h,ne_bc,phiV_bc,delta,.false.)
+               phiV_ar(i,j) = phiV_bc
+            enddo
+         enddo
+      endif
+
+  END SUBROUTINE phiv_fill
+#endif
 
 end module bc_fill_2d_module

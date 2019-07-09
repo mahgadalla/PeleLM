@@ -26,7 +26,12 @@ module PeleLM_F
             set_ht_adim_common, get_pamb, &
             get_closed_chamber, get_dpdt, set_common, active_control, &
             pphys_calc_src_sdc, pphys_getP1atm_MKS, &
-            pphys_get_spec_name2, pphys_TfromHYpt, set_prob_spec
+            pphys_get_spec_name2, pphys_TfromHYpt, set_prob_spec,&
+            pphys_getRuniversal
+
+#ifdef USE_EFIELD         
+  public :: getScalingLap       
+#endif
 
 contains
 
@@ -257,14 +262,24 @@ end subroutine plm_extern_init
 !------------------------------------  
 
   subroutine set_scal_numb(DensityIn, TempIn, TracIn, RhoHIn, &
+#ifdef USE_EFIELD        
+                           nEIn, PhiVIn,&
+#endif
                            FirstSpecIn, LastSpecIn) &
                            bind(C, name="set_scal_numb")
 
     use mod_Fvar_def, only : Density, Temp, RhoH, Trac, FirstSpec, LastSpec
+
+#ifdef USE_EFIELD        
+    use mod_Fvar_def, only : nE, PhiV
+#endif
     
     implicit none
 
     integer DensityIn, TempIn, TracIn, RhoHIn, FirstSpecIn, LastSpecIn
+#ifdef USE_EFIELD
+    integer :: nEIn, PhiVIn 
+#endif
 
 !
 ! ::: Remove SPACEDIM from the counter, since those spots contain the
@@ -277,6 +292,11 @@ end subroutine plm_extern_init
     RhoH = RhoHIn - BL_SPACEDIM + 1
     FirstSpec = FirstSpecIn - BL_SPACEDIM + 1
     LastSpec = LastSpecIn - BL_SPACEDIM + 1
+
+#ifdef USE_EFIELD
+    nE = nEIn - BL_SPACEDIM + 1
+    PhiV = PhiVIn - BL_SPACEDIM + 1
+#endif
 
   end subroutine set_scal_numb
 
@@ -292,7 +312,6 @@ end subroutine plm_extern_init
 
     REAL_T thickeningfac, prandtl, schmidt
     integer unityLe
-
 
     Pr = prandtl
     Sc = schmidt
@@ -750,20 +769,30 @@ end subroutine plm_extern_init
 !-------------------------------------
 
   subroutine set_prob_spec(dm,problo_in, probhi_in,&
+#ifdef USE_EFIELD        
+                           iE_sp_inout,&
+#endif 
                            bath, fuel, oxid, prod, numspec, &
                            flag_active_control)  bind(C, name="set_prob_spec")
  
       use network,  only: nspec
       use mod_Fvar_def, only: dim, domnlo, domnhi
-      use mod_Fvar_def, only: bathID, fuelID, oxidID, prodID
+      use mod_Fvar_def, only: bathID, fuelID, oxidID, prodID, maxspnml
       use mod_Fvar_def, only: f_flag_active_control
+#ifdef USE_EFIELD      
+      use mod_Fvar_def, only: zk, invmwt, spec_charge, CperECharge, Na, iE_sp
+#endif
 
       implicit none
 
       integer, intent(in) :: dm, flag_active_control
       double precision, intent(in) :: problo_in(dm), probhi_in(dm)
+      integer :: iE_sp_inout
 
+      character*(maxspnml) name
       integer bath, fuel, oxid, prod, numspec
+
+      integer :: n
 
       ! Passing dimensions of problem from Cpp to Fortran
       dim = dm
@@ -785,6 +814,44 @@ end subroutine plm_extern_init
          call bl_pd_abort('number of species not consistent')
       endif
       
+#ifdef USE_EFIELD      
+!##############################
+!   A few allocs for efield
+    ALLOCATE(zk(1:Nspec))
+    ALLOCATE(invmwt(1:Nspec))
+    ALLOCATE(spec_charge(1:Nspec))
+
+!   Compute const variables    
+    CALL CKCHRG(spec_charge(1))
+    CALL CKWT(invmwt);
+    invmwt(:) = 1000.0d0/invmwt(:)
+    zk(:) = CperECharge * Na * spec_charge(:) * invmwt(:)
+
+!   Find E species index
+    iE_sp = -1
+    DO n = 1, Nspec
+       CALL pphys_get_spec_name2(name,n)
+       IF ( name .eq. 'E' ) iE_sp = n
+    END DO
+    iE_sp_inout = iE_sp - 1
+    IF (iE_sp == -1) WRITE(6,*) ' .... WARNING: USE_EFIELD = TRUE but no electron found in the chem model !'
+!##############################
+#endif
+
   end subroutine set_prob_spec
+
+#ifdef USE_EFIELD      
+  subroutine getScalingLap(scaling)bind(C, name="getScalingLap")
+
+     USE mod_Fvar_def, ONLY : e0, er, CperECharge
+
+     implicit none
+
+     REAL_T :: scaling
+
+     scaling = e0*er/CperECharge
+
+  end subroutine getScalingLap
+#endif      
 
 end module PeleLM_F

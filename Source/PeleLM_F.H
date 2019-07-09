@@ -117,6 +117,10 @@ extern "C" {
                           const int* Temp,
                           const int* Trac,
                           const int* RhoH,
+#ifdef USE_EFIELD								  
+								  const int* nE,	
+								  const int* PhiV,
+#endif
                           const int* FirstSpec,
                           const int* LastSpec);
     
@@ -384,12 +388,19 @@ extern "C" {
   
   void set_prob_spec (const int& dm,
                       const amrex::Real* problo, const amrex::Real* probhi,
+#ifdef USE_EFIELD
+							 int* iE_sp,	
+#endif
                       const int* bathID,  const int* fuelID,
 	                    const int* oxidID,
 	                    const int* prodID,
 	                    const int* numspec,
                       const int& flag_active_control);
 
+
+#ifdef USE_EFIELD
+#include <PeleLM_efield_F.H>
+#endif
 
 #ifdef __cplusplus
 }

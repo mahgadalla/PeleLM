@@ -14,6 +14,10 @@ all: $(executable)
 	$(SILENT) $(RM) AMReX_buildInfo.cpp
 	@echo SUCCESS
 
+ifeq ($(USE_EFIELD),TRUE)
+        DEFINES += -DUSE_EFIELD
+endif
+
 PELE_PHYSICS_HOME ?= $(TOP)/PelePhysics
 EOS_HOME       = $(PELE_PHYSICS_HOME)/Eos
 REACTIONS_HOME = $(PELE_PHYSICS_HOME)/Reactions

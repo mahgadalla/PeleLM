@@ -12,6 +12,10 @@ implicit none
   
   public :: bcfunction, zero_visc
 
+#ifdef USE_EFIELD  
+  public :: bcfunction_efield 
+#endif
+
 contains
   
 
@@ -85,7 +89,29 @@ contains
 
   end subroutine zero_visc
 
+#ifdef USE_EFIELD  
+!-----------------------
 
+  subroutine bcfunction_efield(x,y,dir,norm,time,u,v,rho,Yl,T,h,ne,phiV,dx,getuv) &
+                        bind(C, name="bcfunction")
+
+      use mod_Fvar_def, only : dim
+
+      implicit none
+
+      REAL_T x, y, time, u, v, rho, Yl(0:*), T, h, ne, phiV, dx(dim)
+      integer dir, norm  ! This specify the direction and orientation of the face
+      logical getuv
+   
+      print *,'You are imposing Dirichlet conditions'
+      print *,'you need to initialize boundary condition function'
+      print *,'in user_defined_ftts_2d.F90'
+      call bl_abort('')
+               
+
+  end subroutine bcfunction_efield
+
+#endif  
 
 end module user_defined_fcts_2d_module
 

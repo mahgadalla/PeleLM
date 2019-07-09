@@ -47,5 +47,17 @@ module mod_Fvar_def
           zbase_control, h_control, controlVelMax
   integer :: navg_pnts, flame_dir, pseudo_gravity
   
+#ifdef USE_EFIELD
+   integer :: nE, PhiV                                  ! nE and phiV index 
+   integer :: iE_sp                                     ! electron index in species list
+   REAL_T, PARAMETER :: Na = 6.022d23                   ! Avogadro's number
+   REAL_T, PARAMETER :: CperECharge = 1.60217662d-19    ! Coulomb per charge
+   REAL_T, PARAMETER :: e0 = 8.854187817d-12            ! Free space permittivity (C/(V.m))
+   REAL_T, PARAMETER :: er = 1.d0                       ! Relative permittivity of air
+   REAL_T, DIMENSION(:), ALLOCATABLE :: zk
+   REAL_T, DIMENSION(:), ALLOCATABLE :: invmwt
+   integer, DIMENSION(:), ALLOCATABLE :: spec_charge
+#endif		
+
   
 end module mod_Fvar_def

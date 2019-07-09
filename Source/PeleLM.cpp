@@ -30,6 +30,11 @@
 #include <AMReX_ccse-mpi.H>
 #include <AMReX_Utility.H>
 #include <NS_util.H>
+#ifdef USE_EFIELD
+#include <AMReX_MLPoisson.H>
+#include <AMReX_MLMG.H>
+#include <AMReX_MLABecLaplacian.H>
+#endif
 
 #if defined(BL_USE_NEWMECH) || defined(BL_USE_VELOCITY)
 #include <AMReX_DataServices.H>
@@ -175,6 +180,25 @@ int PeleLM::mHtoTiterMAX;
 Vector<amrex::Real> PeleLM::mTmpData;
 
 std::string  PeleLM::probin_file = "probin";
+
+#ifdef USE_EFIELD
+int  PeleLM::nE;
+int  PeleLM::iE_sp;
+int  PeleLM::PhiV;
+int  PeleLM::have_nE;
+int  PeleLM::have_PhiV;
+Real PeleLM::ef_phiV_tol;
+int  PeleLM::ef_PoissonMaxIter;
+int  PeleLM::ef_PoissonVerbose;
+int  PeleLM::ef_PoissonMaxOrder;
+int  PeleLM::ef_max_NK_ite;
+Real PeleLM::ef_lambda_jfnk;
+int  PeleLM::ef_max_GMRES_rst;
+Real PeleLM::ef_GMRES_reltol;
+int  PeleLM::ef_GMRES_size;
+Real PeleLM::ef_PC_MG_tol;
+#endif  
+
 
 static
 std::string
@@ -741,6 +765,10 @@ PeleLM::Initialize ()
     }
 
   }
+
+#ifdef USE_EFIELD
+  ef_init();	
+#endif
 
 #ifdef AMREX_PARTICLES
   read_particle_params();
@@ -1337,6 +1365,10 @@ PeleLM::define_data ()
   // this will hold the transport coefficients for Wbar
   diffWbar_cc.define(grids,dmap,nspecies,1);
 #endif
+
+#ifdef USE_EFIELD  
+  ef_define_data();
+#endif
 }
 
 void
@@ -1367,6 +1399,11 @@ PeleLM::init_once ()
   have_rhort = isStateVariable("RhoRT", dummy_State_Type, tRhoRT);
   AMREX_ALWAYS_ASSERT(tRhoRT == RhoRT);
   have_rhort = have_rhort && State_Type == dummy_State_Type;
+
+#ifdef USE_EFIELD
+  have_nE = isStateVariable("nE", dummy_State_Type, nE);
+  have_PhiV = isStateVariable("PhiV", dummy_State_Type, PhiV);
+#endif
 
   if (!have_temp)
     amrex::Abort("PeleLM::init_once(): RhoH & Temp must both be the state");
@@ -1409,7 +1446,11 @@ PeleLM::init_once ()
   //
   const int density = (int)Density;
 
-  set_scal_numb(&density, &Temp, &Trac, &RhoH, &first_spec, &last_spec);
+  set_scal_numb(&density, &Temp, &Trac, &RhoH, 
+#ifdef USE_EFIELD		  
+		  			 &nE, &PhiV,	
+#endif
+		          &first_spec, &last_spec);
   //
   // Load constants from Fortran module to thickenig factor, etc.
   //
@@ -2591,6 +2632,14 @@ PeleLM::post_init (Real stop_time)
     }
   }
 
+#ifdef USE_EFIELD  
+  //
+  // Compute an elec. potential consistent with initial state
+  //
+  amrex::Print() << " Doing initial phiV solve \n";
+  ef_solve_phiv(tnp1) ;
+#endif
+  
   //
   // Estimate the initial timestepping.
   //
@@ -4494,6 +4543,10 @@ PeleLM::advance_setup (Real time,
   calcDiffusivity_Wbar(time);
 #endif
 
+#ifdef USE_EFIELD  
+  ef_advance_setup(time);
+#endif
+
   if (plot_reactions && level == 0)
   {
     for (int i = parent->finestLevel(); i >= 0; --i)
@@ -4813,6 +4866,9 @@ PeleLM::advance (Real time,
 #ifdef USE_WBAR
       calcDiffusivity_Wbar(tnp1);
 #endif
+#ifdef USE_EFIELD
+		ef_calc_transport(tnp1);	
+#endif		
       BL_PROFILE_VAR_STOP(HTDIFF);
 
       // compute Dnp1 and DDnp1
@@ -5072,6 +5128,10 @@ PeleLM::advance (Real time,
     showMF("sdc",DDnp1,"sdc_DDnp1_before_R",level,sdc_iter,parent->levelSteps(level));
     showMF("sdc",Dhat,"sdc_Dhat_before_R",level,sdc_iter,parent->levelSteps(level));
     showMF("sdc",*aofs,"sdc_A_before_R",level,sdc_iter,parent->levelSteps(level));
+
+#ifdef USE_EFIELD
+	 ef_solve_PNP(dt, time, Dn, Dnp1, Dhat);
+#endif	 
 
     // 
     // Compute R (F = A + 0.5(Dn - Dnp1 + DDn + DDnp1) + Dhat )
@@ -8382,3 +8442,7 @@ PeleLM::errorEst (TagBoxArray& tags,
     }
   }
 }
+
+#ifdef USE_EFIELD
+#include <PeleLM_efield.cpp>
+#endif

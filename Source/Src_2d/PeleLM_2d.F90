@@ -39,6 +39,10 @@ module PeleLM_2d
              pphys_PfromRTY, pphys_mass_to_mole, pphys_massr_to_conc, pphys_HfromT, &
              pphys_HMIXfromTY, pphys_RHOfromPTY, FORT_AVERAGE_EDGE_STATES
 
+#ifdef USE_EFIELD          
+  public ::  ef_calc_rhs_poisson
+#endif
+
 contains
 
   subroutine calc_divu_fortran(lo, hi, &
@@ -2962,5 +2966,196 @@ contains
       endif
 
       end subroutine FORT_AVERAGE_EDGE_STATES
+
+#ifdef USE_EFIELD
+  subroutine ef_calc_rhs_poisson(lo, hi, rhs, DIMS(rhs), &
+                                 rhoY, DIMS(rhoY), ne_ar, DIMS(ne_ar)) &
+                                 bind(C, name="ef_calc_rhs_poisson")
+
+    USE mod_Fvar_def, ONLY : zk, CperECharge, e0, er                         
+    use network,      only : nspec
+
+    implicit none
+
+    integer :: lo(dim),hi(dim)
+    integer :: DIMDEC(rhs)
+    integer :: DIMDEC(rhoY)
+    integer :: DIMDEC(ne_ar)
+    REAL_T  :: rhs(DIMV(rhs))
+    REAL_T  :: rhoY(DIMV(rhoY),1:nspec)
+    REAL_T  :: ne_ar(DIMV(ne_ar))
+      
+    integer :: i, j
+    REAL_T :: factor_rhs
+
+    factor_rhs = - 1.0d0 / ( e0 * er )
+    do j=lo(2),hi(2)
+       do i=lo(1),hi(1)
+          rhs(i,j) = (SUM(zk(1:nspec) * rhoY(i,j,1:nspec)) - ne_ar(i,j) * CperECharge ) * factor_rhs
+       enddo
+    enddo
+
+  end subroutine ef_calc_rhs_poisson
+
+  subroutine ef_spec_mobility(lo,hi, &
+                              T, DIMS(T), &
+                              rhoY, DIMS(rhoY), &
+                              rhoD, DIMS(rhoD), &
+                              kp_sp, DIMS(kp_sp)) &
+                              bind(C, name="ef_spec_mobility")
+
+    USE mod_Fvar_def, ONLY: zk
+    USE PeleLM_F,     only: pphys_getRuniversal
+    use network,      only : nspec
+    
+    implicit none
+
+    integer :: lo(dim),hi(dim)
+    integer :: DIMDEC(T)
+    integer :: DIMDEC(rhoY)
+    integer :: DIMDEC(rhoD)
+    integer :: DIMDEC(kp_sp)
+    REAL_T  :: T(DIMV(T))
+    REAL_T  :: rhoY(DIMV(rhoY),nspec)
+    REAL_T  :: rhoD(DIMV(rhoD),nspec)
+    REAL_T  :: kp_sp(DIMV(kp_sp),nspec)
+      
+    integer :: i, j
+    REAL_T :: Wbar, rho, oneoverdenom
+    REAL_T, DIMENSION(1:Nspec) :: Y
+
+    do j = lo(2), hi(2)
+      do i = lo(1), hi(1)
+        rho = SUM(rhoY(i,j,:))
+        Y(:) = rhoY(i,j,:)/rho
+        CALL CKMMWY(Y(:),Wbar)
+        oneoverdenom = 1.0d0 / ( rho * pphys_getRuniversal() * T(i,j) )
+        kp_sp(i,j,:) = rhoD(i,j,:) * Wbar * zk(:) * oneoverdenom
+      end do
+    end do
+
+  end subroutine ef_spec_mobility
+
+  subroutine ef_elec_mobility(lo,hi, &
+                              T, DIMS(T), &
+                              rhoY, DIMS(rhoY), &
+                              phiV, DIMS(phiV), &
+                              kp_e, DIMS(kp_e)) &
+                              bind(C, name="ef_elec_mobility")
+
+    use network,      only : nspec
+
+    implicit none
+
+    integer :: lo(dim),hi(dim)
+    integer :: DIMDEC(T)
+    integer :: DIMDEC(rhoY)
+    integer :: DIMDEC(phiV)
+    integer :: DIMDEC(kp_e)
+    REAL_T  :: T(DIMV(T))
+    REAL_T  :: rhoY(DIMV(rhoY),nspec)
+    REAL_T  :: phiV(DIMV(phiV))
+    REAL_T  :: kp_e(DIMV(kp_e))
+      
+    integer :: i, j
+
+    do j = lo(2), hi(2)
+      do i = lo(1), hi(1)
+        kp_e(i,j) = 0.4d0
+      end do
+    end do
+
+  end subroutine ef_elec_mobility
+
+  subroutine ef_elec_diffusivity(lo,hi, &
+                                 T, DIMS(T), &
+                                 rhoY, DIMS(rhoY), &
+                                 phiV, DIMS(phiV), &
+                                 kp_e, DIMS(kp_e), &
+                                 diff_e, DIMS(diff_e)) &
+                                 bind(C, name="ef_elec_diffusivity")
+
+    USE mod_Fvar_def, ONLY: Na, CperECharge
+    USE PeleLM_F,     only: pphys_getRuniversal
+    use network,      only : nspec
+    
+    implicit none
+
+    integer :: lo(dim),hi(dim)
+    integer :: DIMDEC(T)
+    integer :: DIMDEC(rhoY)
+    integer :: DIMDEC(phiV)
+    integer :: DIMDEC(kp_e)
+    integer :: DIMDEC(diff_e)
+    REAL_T  :: T(DIMV(T))
+    REAL_T  :: rhoY(DIMV(rhoY),nspec)
+    REAL_T  :: phiV(DIMV(phiV))
+    REAL_T  :: kp_e(DIMV(kp_e))
+    REAL_T  :: diff_e(DIMV(diff_e))
+      
+    integer :: i, j
+
+    REAL_T :: oneoverdenom
+
+    oneoverdenom = 1.0d0 / ( Na * CperECharge ) 
+
+    do j = lo(2), hi(2)
+      do i = lo(1), hi(1)
+        diff_e(i,j) = kp_e(i,j) * pphys_getRuniversal() * 0.001d0 * T(i,j) * oneoverdenom
+      end do
+    end do
+
+  end subroutine ef_elec_diffusivity
+
+! Compute provisional ions charge distribution divided by elementary charge.   
+  subroutine ef_calc_chargedist_prov(lo, hi, &
+                                     rhoY_old, DIMS(rhoY_old), &
+                                     AofS, DIMS(AofS), &
+                                     Dn, DIMS(Dn), &
+                                     Dnp1, DIMS(Dnp1), &
+                                     Dhat, DIMS(Dhat), &
+                                     I_R, DIMS(I_R), &
+                                     bg_chrg, DIMS(bg_chrg), &
+                                     dt) bind(C, name="ef_calc_chargedist_prov")
+
+  USE mod_Fvar_def, ONLY : zk, CperECharge
+  use network,      only : nspec
+
+  implicit none
+
+  integer :: lo(dim),hi(dim)
+  integer :: DIMDEC(rhoY_old)
+  integer :: DIMDEC(AofS)
+  integer :: DIMDEC(Dn)
+  integer :: DIMDEC(Dnp1)
+  integer :: DIMDEC(Dhat)
+  integer :: DIMDEC(I_R)
+  integer :: DIMDEC(bg_chrg)
+  REAL_T  :: rhoY_old(DIMV(rhoY_old), nspec)
+  REAL_T  :: AofS(DIMV(AofS), nspec)
+  REAL_T  :: Dn(DIMV(Dn), nspec)
+  REAL_T  :: Dnp1(DIMV(Dnp1), nspec)
+  REAL_T  :: Dhat(DIMV(Dhat), nspec)
+  REAL_T  :: I_R(DIMV(I_R), nspec)
+  REAL_T  :: bg_chrg(DIMV(bg_chrg))
+  REAL_T  :: dt
+
+  integer :: i, j
+
+  REAL_T, DIMENSION(1:nspec) :: rhoYprov
+
+  do j = lo(2), hi(2)
+    do i = lo(1), hi(1)
+      rhoYprov(:) = rhoY_old(i,j,:) + dt * ( AofS(i,j,:) + &
+                                             0.5d0 * ( Dn(i,j,:) - Dnp1(i,j,:) ) + &
+                                             Dhat(i,j,:) + &
+                                             I_R(i,j,:) )
+      bg_chrg(i,j) = SUM(zk(1:nspec) * rhoYprov(1:nspec)) / CperECharge
+    end do
+  end do
+
+  end subroutine ef_calc_chargedist_prov
+
+#endif  
 
 end module PeleLM_2d

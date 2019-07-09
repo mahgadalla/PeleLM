@@ -4,6 +4,11 @@
 
 #include <AMReX_AuxBoundaryData.H>
 #include <NavierStokesBase.H>
+#ifdef USE_EFIELD
+#include <AMReX_MLMG.H>
+#include <AMReX_MLABecCecLaplacian.H>
+#include <AMReX_MLABecLaplacian.H>
+#endif
 
 #include <list>
 #include <map>
@@ -674,6 +679,11 @@ private:
   static int nGrowAdvForcing;
 
   static std::string probin_file;
+
+#ifdef USE_EFIELD
+#include <PeleLM_efield.H>  
+#endif  
+
 };
 
 #endif /*_PeleLM_H_*/
