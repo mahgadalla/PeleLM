@@ -233,7 +233,7 @@ void PeleLM::ef_solve_PNP(const Real     &dt,
 	amrex::Print() << " ne scaling: " << pnp_SUne << "\n";
 	amrex::Print() << " PhiV scaling: " << pnp_SUphiV << "\n";
 	showMF("pnp",pnp_U,"pnp_U0",level);
-//	showMFsub("pnp1D",pnp_U,stripBox,"1Dpnp_U0",level);
+	showMFsub("pnp1D",pnp_U,stripBox,"1Dpnp_U0",level);
 
 	//	Vector<Real> norm_NL_U0(2);
 	const Real norm_NL_U0 = ef_NL_norm(pnp_U); 
@@ -277,11 +277,11 @@ void PeleLM::ef_solve_PNP(const Real     &dt,
 		//    Test exit conditions  	
 	   test_exit_newton(pnp_res, NK_ite, norm_NL_res0, norm_NL_res, exit_newton);
 
-		amrex::Abort("In Newton stop");
+//		amrex::Abort("In Newton stop");
    } while( ! exit_newton );
 
 	// Post newton stuff
-	//	showMFsub("pnp1D",pnp_U,stripBox,"1DpostNewt_U",level);
+	showMFsub("pnp1D",pnp_U,stripBox,"1DpostNewt_U",level);
 	showMF("pnp",pnp_U,"postNewt_U",level);
 	//TODO: 0 or 1 GC after pnp ?
 	MultiFab::Copy(S,pnp_U,0,nE,2,1);
@@ -337,7 +337,7 @@ void PeleLM::ef_linesearch(const Real		&dt,
 		   //showMFsub("pnp1D",pnp_U,stripBox,"1Dpnp_ULS",level);
 		   //showMFsub("pnp1D",pnp_dU,stripBox,"1Dpnp_dULS",level);
 		   //showMFsub("pnp1D",pnp_Utmp,stripBox,"1Dpnp_UtmpLS",level);
-			MultiFab::Copy(pnp_Utmp,pnp_dU,0,0,2,1);
+			MultiFab::Copy(pnp_Utmp,pnp_dU,0,0,2,0);
 			pnp_Utmp.mult(lambda,0,2);
 			pnp_Utmp.plus(pnp_U,0,2,Godunov::hypgrow());
 			ef_NL_residual( dt, pnp_Utmp, pnp_res, false, true );
@@ -584,14 +584,14 @@ void PeleLM::compute_ne_diffusion_term(const Real      &dt,
 													      MultiFab  &diff_ne) {
 
 // Get nEmf from fpi on S for BC
-	const Real time  = state[State_Type].curTime();	// current time
-	MultiFab&  S = get_new_data(State_Type);
-	FillPatchIterator nEfpi(*this,S,1,time,State_Type,nE,1);
-	MultiFab& nEmf = nEfpi.get_mf();
+//	const Real time  = state[State_Type].curTime();	// current time
+//	MultiFab&  S = get_new_data(State_Type);
+//	FillPatchIterator nEfpi(*this,S,1,time,State_Type,nE,1);
+//	MultiFab& nEmf = nEfpi.get_mf();
 //	MultiFab nE_new(grids,dmap,1,1);
 //	MultiFab::Copy(nE_new,pnp_U,0,0,1,0);
 //	nE_new.FillBoundary();
-//	MultiFab nE_alias(pnp_U,amrex::make_alias,0,1);
+	MultiFab nE_alias(pnp_U,amrex::make_alias,0,1);
 
 // Set-up Lapl operator
    LPInfo info;
@@ -607,7 +607,7 @@ void PeleLM::compute_ne_diffusion_term(const Real      &dt,
    std::array<LinOpBCType,AMREX_SPACEDIM> mlmg_hibc;
 	ef_set_neBC(mlmg_lobc, mlmg_hibc);
 	ne_LAPL.setDomainBC(mlmg_lobc, mlmg_hibc);
-   ne_LAPL.setLevelBC(0, &nEmf);
+   ne_LAPL.setLevelBC(0, &nE_alias);
 
 // Coeff's	
    ne_LAPL.setScalars(0.0, 1.0); 
@@ -618,7 +618,7 @@ void PeleLM::compute_ne_diffusion_term(const Real      &dt,
 //	FluxBoxes fluxb  (this, 1, 0);								// Flux box ...
 //	MultiFab **flux    =   fluxb.get();							// ... associated flux MultiFab
 	MLMG mlmg(ne_LAPL);
-	mlmg.apply({&diff_ne},{&nEmf});
+	mlmg.apply({&diff_ne},{&nE_alias});
 
 	diff_ne.mult(-1.0);
 
