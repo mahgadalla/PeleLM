@@ -40,6 +40,10 @@
 #include <AMReX_Utility.H>
 #include <NS_error_F.H>
 
+#ifdef AMREX_USE_SUNDIALS_3x4x 
+#include <actual_Creactor.h>
+#endif
+
 using namespace amrex;
 
 #define DEF_LIMITS(fab,fabdat,fablo,fabhi)      \
@@ -485,7 +489,7 @@ PeleLM::variableSetUp ()
 #ifdef _OPENMP
 #pragma omp parallel
 #endif  
-  reactor_init(&cvode_iE);
+  reactor_init(&cvode_iE,&cvode_ncells);
 
   init_transport(use_tranlib);
 
