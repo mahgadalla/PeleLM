@@ -49,4 +49,11 @@
                                amrex::Real* bg_chrg,  ARLIM_P(bglo),  ARLIM_P(bghi),
 										 const amrex::Real* dt);
 
+  void ef_pphys_RRATERHOY(const int* lo, const int* hi,
+                          const amrex::Real* RhoY, ARLIM_P(RhoYlo),    ARLIM_P(RhoYhi),
+                          const amrex::Real* nE_dat, ARLIM_P(nElo),    ARLIM_P(nEhi),
+                          const amrex::Real* RhoH, ARLIM_P(RhoHlo),    ARLIM_P(RhoHhi),
+                          const amrex::Real* T,    ARLIM_P(Tlo),       ARLIM_P(Thi),
+                          amrex::Real*    RhoYdot, ARLIM_P(RhoYdotlo), ARLIM_P(RhoYdothi) );
+
   void getScalingLap(amrex::Real* scaling);

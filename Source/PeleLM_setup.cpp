@@ -499,9 +499,9 @@ PeleLM::variableSetUp ()
 //  int Trac      = -1;
 //  int RhoRT     = -1;
 #ifdef USE_EFIELD  
-  int nE        = -1;
-  int iE_sp     = -1;
-  int PhiV      = -1;
+  nE        = -1;
+  iE_sp     = -1;
+  PhiV      = -1;
 #endif
 
   first_spec = ++counter;
@@ -692,6 +692,7 @@ PeleLM::variableSetUp ()
   }
 
 #ifdef USE_EFIELD
+    amrex::Print() << " index for species electron " << iE_sp << std::endl;
     set_ne_bc(bc,phys_bc);
     desc_lst.setComponent(State_Type,nE,"nE",bc,BndryFunc(ne_fill));
 
@@ -1167,8 +1168,13 @@ PeleLM::rhoydotSetUp()
 {
   RhoYdot_Type       = desc_lst.size();
   const int ngrow = 1;
+  int nspec;
   int nrhoydot;
-  pphys_get_num_spec(&nrhoydot);
+  pphys_get_num_spec(&nspec);
+  nrhoydot = nspec;
+#ifdef USE_EFIELD
+  nrhoydot = nspec+1;
+#endif  
 
   amrex::Print() << "RhoYdot_Type, nrhoydot = " << RhoYdot_Type << ' ' << nrhoydot << '\n';
 
@@ -1180,12 +1186,17 @@ PeleLM::rhoydotSetUp()
 
   BCRec bc;	
   set_rhoydot_bc(bc,phys_bc);
-  for (int i = 0; i < nrhoydot; i++)
+  for (int i = 0; i < nspec; i++)
   {
     const std::string name = "I_R[rhoY("+spec_names[i]+")]";
     desc_lst.setComponent(RhoYdot_Type, i, name.c_str(), bc,
-                          BndryFunc(rhoYdot_fill), &lincc_interp, 0, nrhoydot-1);
+                          BndryFunc(rhoYdot_fill), &lincc_interp, 0, nspec-1);
   }
+#ifdef USE_EFIELD
+  const std::string name = "I_R[nE]";
+  desc_lst.setComponent(RhoYdot_Type, nrhoydot-1, name.c_str(), bc,
+                        BndryFunc(rhoYdot_fill), &lincc_interp, 0, nrhoydot-1);
+#endif  
 }
 
 

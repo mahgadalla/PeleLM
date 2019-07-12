@@ -153,6 +153,7 @@ void PeleLM::ef_solve_phiv(const Real &time) {
 //	mlmg.setBottomVerbose(bottom_verbose);
 
 // Actual solve
+	PhiV_alias.setVal(0.0);
 	mlmg.solve({&PhiV_alias}, {&rhs_poisson}, S_tol, S_tol_abs);
 
 }
@@ -1183,6 +1184,41 @@ void PeleLM::ef_applyPrecond ( const int      &GMRES_ite,
 
 
 //	amrex::Abort("In applyPrecond !");
+}
+
+void
+PeleLM::ef_reactionRateRhoY_pphys(FArrayBox&       RhoYdot,
+                                  const FArrayBox& RhoY,
+                                  const FArrayBox& RhoH,
+                                  const FArrayBox& T,
+                                  const FArrayBox& nE_fab,
+                                  const Box&       box,
+                                  int              sCompRhoY,
+                                  int              sCompRhoH,
+                                  int              sCompT,
+                                  int              sCompnE,
+                                  int              sCompRhoYdot) const
+{
+    BL_ASSERT(RhoYdot.nComp() >= sCompRhoYdot + nspecies);
+    BL_ASSERT(RhoY.nComp() >= sCompRhoY + nspecies);
+    BL_ASSERT(RhoH.nComp() > sCompRhoH);
+    BL_ASSERT(T.nComp() > sCompT);
+    BL_ASSERT(nE_fab.nComp() > sCompnE);
+
+    const Box& mabx = RhoY.box();
+    const Box& mbbx = RhoH.box();
+    const Box& mcbx = T.box();
+    const Box& mobx = RhoYdot.box();
+    
+    const Box& ovlp = box & mabx & mbbx & mcbx & mobx;
+    if( ! ovlp.ok() ) return;
+    
+    ef_pphys_RRATERHOY(ovlp.loVect(), ovlp.hiVect(),
+                       RhoY.dataPtr(sCompRhoY),       ARLIM(mabx.loVect()), ARLIM(mabx.hiVect()),
+                       nE_fab.dataPtr(sCompnE),       ARLIM(mabx.loVect()), ARLIM(mabx.hiVect()),
+                       RhoH.dataPtr(sCompRhoH),       ARLIM(mbbx.loVect()), ARLIM(mbbx.hiVect()),
+                       T.dataPtr(sCompT),             ARLIM(mcbx.loVect()), ARLIM(mcbx.hiVect()),
+                       RhoYdot.dataPtr(sCompRhoYdot), ARLIM(mobx.loVect()), ARLIM(mobx.hiVect()));
 }
 
 void

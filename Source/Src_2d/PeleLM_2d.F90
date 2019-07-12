@@ -40,7 +40,7 @@ module PeleLM_2d
              pphys_HMIXfromTY, pphys_RHOfromPTY, FORT_AVERAGE_EDGE_STATES
 
 #ifdef USE_EFIELD          
-  public ::  ef_calc_rhs_poisson
+  public ::  ef_calc_rhs_poisson, ef_pphys_RRATERHOY
 #endif
 
 contains
@@ -3155,6 +3155,57 @@ contains
   end do
 
   end subroutine ef_calc_chargedist_prov
+
+  subroutine ef_pphys_RRATERHOY(lo,hi,RhoY,DIMS(RhoY),nE_dat,DIMS(nE_dat),RhoH,DIMS(RhoH),T,DIMS(T), &
+                                RhoYdot,DIMS(RhoYdot))&
+                                bind(C, name="ef_pphys_RRATERHOY")
+      
+      use network,       only : nspec
+      use mod_Fvar_def,  only : Na, iE_sp 
+
+      implicit none
+
+      integer lo(dim)
+      integer hi(dim)
+      integer DIMDEC(RhoY)
+      integer DIMDEC(nE_dat)
+      integer DIMDEC(RhoH)
+      integer DIMDEC(T)
+      integer DIMDEC(RhoYdot)
+      REAL_T RhoY(DIMV(RhoY),nspec)
+      REAL_T nE_dat(DIMV(nE_dat))
+      REAL_T RhoH(DIMV(RhoH))
+      REAL_T T(DIMV(T))
+      REAL_T RhoYdot(DIMV(RhoYdot),nspec+1)
+
+      REAL_T :: rhoinv, Hmix, Temp
+      REAL_T, DIMENSION(1:nspec) :: Yk, Conc, mwt, Wdot
+      integer :: lierr
+      integer i,j,n
+
+      call CKWT(mwt);
+
+      do j=lo(2),hi(2)
+         do i=lo(1),hi(1)
+
+            rhoinv = 1.0d0 / SUM(RhoY(i,j,1:nspec))
+            Yk(1:nspec) = RhoY(i,j,1:nspec) * rhoinv
+            Conc(1:nspec) = RhoY(i,j,1:nspec) / mwt(1:nspec) * 1.0d-3
+            Conc(iE_sp) = nE_dat(i,j) / Na * 1.0d-6
+
+            Hmix = RhoH(i,j) * rhoinv * 1.0d4
+            Temp = T(i,j)
+            call get_t_given_hY(Hmix, Yk(1:nspec), Temp, lierr);
+            call CKWC(Temp,Conc(1:nspec),Wdot(1:nspec))
+
+            RhoYdot(i,j,1:nspec) = Wdot(1:nspec) * mwt(1:nspec) * 1.0d3
+            RhoYdot(i,j,nspec+1) = Wdot(iE_sp) * Na * 1.0d6
+            RhoYdot(i,j,iE_sp) = 0.0d0
+
+         end do
+      end do
+      
+  end subroutine ef_pphys_RRATERHOY
 
 #endif  
 

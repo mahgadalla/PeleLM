@@ -620,7 +620,7 @@ PeleLM::Initialize ()
   PeleLM::plot_reactions            = false;
   PeleLM::plot_consumption          = true;
   PeleLM::plot_heat_release         = true;
-  plot_rhoydot                            = false;
+  plot_rhoydot                      = false;
   PeleLM::new_T_threshold           = -1;  // On new AMR level, max change in lower bound for T, not used if <=0
   PeleLM::avg_down_chem             = false;
   PeleLM::reset_typical_vals_int    = -1;
@@ -1910,6 +1910,16 @@ PeleLM::estTimeStep ()
     amrex::Print() << "PeleLM::estTimeStep(): timestep reduced from " 
 		   << ns_estdt << " to " << estdt << '\n';
 
+//#ifdef USE_EFIELD
+//  ns_estdt = estdt;	
+//  Real  ion_estdt = ef_estTimeStep();
+//  estdt = std::min(estdt, ion_estdt);
+//
+//  if (estdt < ns_estdt && verbose)
+//    amrex::Print() << "PeleLM::estTimeStep(): efield timestep reduced from " 
+//		   << ns_estdt << " to " << estdt << '\n';
+//#endif			
+
   if (verbose > 1)
   {
     const int IOProc   = ParallelDescriptor::IOProcessorNumber();
@@ -2270,6 +2280,9 @@ PeleLM::compute_instantaneous_reaction_rates (MultiFab&       R,
   const int sCompRhoY    = first_spec;
   const int sCompT       = Temp;
   const int sCompRhoYdot = 0;
+#ifdef USE_EFIELD
+  const int sCompnE      = nE;
+#endif
     
 #ifdef _OPENMP
 #pragma omp parallel
@@ -2282,8 +2295,12 @@ PeleLM::compute_instantaneous_reaction_rates (MultiFab&       R,
     const Box& box = mfi.tilebox();
     FArrayBox& rhoYdot = R[mfi];
 
+#ifdef USE_EFIELD
+    const FArrayBox& nE    = S[mfi];
+    ef_reactionRateRhoY_pphys(rhoYdot,rhoY,rhoH,T,nE,box,sCompRhoY,sCompRhoH,sCompT,sCompnE,sCompRhoYdot);
+#else
     reactionRateRhoY_pphys(rhoYdot,rhoY,rhoH,T,box,sCompRhoY,sCompRhoH,sCompT,sCompRhoYdot);
-
+#endif	 
   }
     
   if ((nGrow>0) && (how == HT_EXTRAP_GROW_CELLS))
@@ -5132,9 +5149,9 @@ PeleLM::advance (Real time,
     showMF("sdc",Dhat,"sdc_Dhat_before_R",level,sdc_iter,parent->levelSteps(level));
     showMF("sdc",*aofs,"sdc_A_before_R",level,sdc_iter,parent->levelSteps(level));
 
-#ifdef USE_EFIELD
-	 ef_solve_PNP(dt, time, Dn, Dnp1, Dhat);
-#endif	 
+//#ifdef USE_EFIELD
+//	 ef_solve_PNP(dt, time, Dn, Dnp1, Dhat);
+//#endif	 
 
     // 
     // Compute R (F = A + 0.5(Dn - Dnp1 + DDn + DDnp1) + Dhat )
@@ -5661,34 +5678,32 @@ PeleLM::advance_chemistry (MultiFab&       mf_old,
       for         (int k = 0; k < len.z; ++k) {
           for         (int j = 0; j < len.y; ++j) {
               for         (int i = 0; i < len.x; ++i) {
-
                   for (int sp=0;sp<nspecies; sp++){
                       tmp_vect[sp]       = rhoY(i,j,k,sp) * 1.e-3;
-		      tmp_src_vect[sp]   = frcing(i,j,k,sp) * 1.e-3;
+		      			 tmp_src_vect[sp]   = frcing(i,j,k,sp) * 1.e-3;
                   }    
-		  tmp_vect[nspecies]     = rhoY(i,j,k,nspecies+2);
-		  tmp_vect_energy[0]     = rhoY(i,j,k,nspecies) * 10.0;
-		  tmp_src_vect_energy[0] = frcing(i,j,k,nspecies) * 10.0;
+		  				tmp_vect[nspecies]     = rhoY(i,j,k,nspecies+2);
+		  				tmp_vect_energy[0]     = rhoY(i,j,k,nspecies) * 10.0;
+		  				tmp_src_vect_energy[0] = frcing(i,j,k,nspecies) * 10.0;
                   fcl(i,j,k) = react(tmp_vect, tmp_src_vect,
-				  tmp_vect_energy, tmp_src_vect_energy,
-				  &pressure, &dt_incr, &time_init, &reInit);
+				  								 tmp_vect_energy, tmp_src_vect_energy,
+				  							  	 &pressure, &dt_incr, &time_init, &reInit);
 
-		  dt_incr = dt;
-		  for (int sp=0;sp<nspecies; sp++){
-	              rhoY(i,j,k,sp)      = tmp_vect[sp] * 1.e+3;
-                      if (rhoY(i,j,k,sp) != rhoY(i,j,k,sp)) {
+		  				dt_incr = dt;
+		  				for (int sp=0;sp<nspecies; sp++){
+	              		rhoY(i,j,k,sp)      = tmp_vect[sp] * 1.e+3;
+                     if (rhoY(i,j,k,sp) != rhoY(i,j,k,sp)) {
                           amrex::Abort("NaNs !! ");
-                      }
-		  }
-		  rhoY(i,j,k,nspecies+2)  = tmp_vect[nspecies]; 
+                     }
+		  				}
+		  				rhoY(i,j,k,nspecies+2)  = tmp_vect[nspecies]; 
                   if (rhoY(i,j,k,nspecies+2) != rhoY(i,j,k,nspecies+2)) {
-                      amrex::Abort("NaNs !! ");
+                     amrex::Abort("NaNs !! ");
                   }
-	          rhoY(i,j,k,nspecies) = tmp_vect_energy[0] * 1.e-01;
+	          		rhoY(i,j,k,nspecies) = tmp_vect_energy[0] * 1.e-01;
                   if (rhoY(i,j,k,nspecies) != rhoY(i,j,k,nspecies)) {
-                      amrex::Abort("NaNs !! ");
+                     amrex::Abort("NaNs !! ");
                   }
-
               }
           }
       }
@@ -7632,7 +7647,11 @@ PeleLM::calc_divu (Real      time,
     else if (dt > 0)
     {
       // init_iter or regular time step, use instantaneous omegadot
+#ifdef USE_EFIELD		 
+      RhoYdot.define(grids,dmap,nspecies+1,0);
+#else
       RhoYdot.define(grids,dmap,nspecies,0);
+#endif
       compute_instantaneous_reaction_rates(RhoYdot,S,time,nGrow);
     }
     else

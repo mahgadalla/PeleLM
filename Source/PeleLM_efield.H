@@ -165,6 +165,21 @@
 							 		amrex::MultiFab   &field,
 						         amrex::MultiFab   **grad_field);
 
+   void ef_reactionRateRhoY_pphys(amrex::FArrayBox&       RhoYdot,
+                                  const amrex::FArrayBox& RhoY,
+                                  const amrex::FArrayBox& RhoH,
+                                  const amrex::FArrayBox& T,
+                                  const amrex::FArrayBox& ne_fab,
+                                  const amrex::Box&       box,
+                                  int              sCompRhoY,
+                                  int              sCompRhoH,
+                                  int              sCompT,
+                                  int              sCompnE,
+                                  int              sCompRhoYdot) const;
+
+// Time step estimate
+   amrex::Real ef_estTimeStep();
+
 // Similar to center_to_edge_fancy but upwinded
    static void center_to_edge_upwind_fancy (const amrex::FArrayBox& cfab,
                                             const amrex::FArrayBox& velefab,
