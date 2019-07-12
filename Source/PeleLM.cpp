@@ -5709,7 +5709,7 @@ PeleLM::compute_scalar_advection_fluxes_and_divergence (const MultiFab& Force,
 
   MultiFab dummy(grids,dmap,1,0,MFInfo().SetAlloc(false));
   
-  // We advect rho.Y and rho.h
+  // We advect rho.Y and rho.hi //TODO see if we want to "remove, Godunov" 
   FillPatchIterator S_fpi(*this,dummy,Godunov::hypgrow(),prev_time,State_Type,first_spec,nspecies+1);
   MultiFab& Smf=S_fpi.get_mf();
 
@@ -5717,7 +5717,7 @@ PeleLM::compute_scalar_advection_fluxes_and_divergence (const MultiFab& Force,
 #ifdef _OPENMP
 #pragma omp parallel
 #endif
-  for (MFIter mfi(Smf,true); mfi.isValid(); ++mfi)
+  for (MFIter mfi(Smf,TilingIfNotGPU()); mfi.isValid(); ++mfi)
   {
     Box gbx=mfi.growntilebox(Godunov::hypgrow());
     auto fab = Smf.array(mfi);
@@ -5736,11 +5736,15 @@ PeleLM::compute_scalar_advection_fluxes_and_divergence (const MultiFab& Force,
   FArrayBox edgstate[BL_SPACEDIM];
   Vector<int> state_bc;
  
-  for (MFIter S_mfi(Smf,true); S_mfi.isValid(); ++S_mfi)
+  for (MFIter S_mfi(Smf,TilingIfNotGPU()); S_mfi.isValid(); ++S_mfi)
   {
     const Box& bx = S_mfi.tilebox();
-    const FArrayBox& divu = DivU[S_mfi];
-    const FArrayBox& force = Force[S_mfi];
+//    const FArrayBox& divu = DivU[S_mfi];
+//    const FArrayBox& force = Force[S_mfi];
+    auto const divu = DivU.array(S_mfi); 
+    auto const force = Force.array(S_mfi); 
+    
+    
 
     for (int d=0; d<BL_SPACEDIM; ++d)
     {
@@ -5758,8 +5762,9 @@ PeleLM::compute_scalar_advection_fluxes_and_divergence (const MultiFab& Force,
     } 
         
     state_bc = fetchBCArray(State_Type,bx,first_spec,nspecies+1);
-
+// TODO change this from a IAMR CPU funct to PeleLM GPU op 
     // Note that the FPU argument is no longer used in IAMR->Godunov.cpp because FPU is now default
+    PeleLM_AdvectScalars(bx, dx, dt, 
     godunov->AdvectScalars(bx, dx, dt, 
                            D_DECL(  area[0][S_mfi],  area[1][S_mfi],  area[2][S_mfi]),
                            D_DECL( u_mac[0][S_mfi], u_mac[1][S_mfi], u_mac[2][S_mfi]),
@@ -5769,7 +5774,7 @@ PeleLM::compute_scalar_advection_fluxes_and_divergence (const MultiFab& Force,
                            (*aofs)[S_mfi], first_spec, advectionType, state_bc, FPU, volume[S_mfi]);
        
     // Accumulate rho flux divergence, rho on edges, and rho flux on edges
-    
+// TODO these are all CPU fab functions.     
      for (int d=0; d<BL_SPACEDIM; ++d)
      {
        const Box& ebx = S_mfi.nodaltilebox(d);
@@ -5782,11 +5787,11 @@ PeleLM::compute_scalar_advection_fluxes_and_divergence (const MultiFab& Force,
        int state_ind = first_spec + comp;
        if (state_ind >= first_spec && state_ind <= last_spec)
        {
-         (*aofs)[S_mfi].plus((*aofs)[S_mfi],bx,bx,state_ind,Density,1);
+         (*aofs)[S_mfi].plus((*aofs)[S_mfi],bx,bx,state_ind,Density,1); //Can we make this a multifab op?
          for (int d=0; d<BL_SPACEDIM; d++)
          {
            const Box& ebx = S_mfi.nodaltilebox(d);
-           (*EdgeState[d])[S_mfi].plus(edgstate[d],ebx,ebx,comp,Density,1);
+           (*EdgeState[d])[S_mfi].plus(edgstate[d],ebx,ebx,comp,Density,1); //Maybe just launch a kernel
            (*EdgeFlux[d])[S_mfi].plus(cflux[d],ebx,ebx,comp,Density,1);
          }
        }
