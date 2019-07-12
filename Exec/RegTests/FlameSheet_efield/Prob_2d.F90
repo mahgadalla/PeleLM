@@ -181,7 +181,7 @@ contains
     integer n
     integer b(2)
     data  b / 1, 1 /
-    LOGICAL :: hack_gauss_ne = .TRUE.
+    LOGICAL :: hack_gauss_ne = .FALSE.
     integer :: inletzone, outletzone
     integer :: num_zones_defined
       
@@ -219,7 +219,7 @@ contains
 #ifdef USE_EFIELD        
      ne_bc(inletzone) = 0.0d0
      phiV_bc(inletzone) = 0.0d0
-     phiV_bc(outletzone) = 5.0d0
+     phiV_bc(outletzone) = 2.0d0
      IF ( hack_gauss_ne ) THEN
         T_bc(inletzone) = 298.0d0
         Y_bc(0:Nspec-1,inletzone) =  0.0d0
@@ -309,7 +309,7 @@ contains
 
 #ifdef USE_EFIELD      
       REAL_T :: CD, sum_pos_ion, mean_zk_pos_ion
-      LOGICAL :: hack_gauss_ne = .TRUE.
+      LOGICAL :: hack_gauss_ne = .FALSE.
       REAL_T, PARAMETER :: PI = ATAN(1.0d0) * 4.0d0
 #endif
 
