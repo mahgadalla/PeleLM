@@ -2692,8 +2692,11 @@ PeleLM::post_init (Real stop_time)
         // Don't update S_new in this strang_chem() call ...
         //
         MultiFab S_tmp(S_new.boxArray(),S_new.DistributionMap(),S_new.nComp(),0);
-
+#ifdef USE_EFIELD
+        MultiFab Forcing_tmp(S_new.boxArray(),S_new.DistributionMap(),nspecies+2,0);
+#else
         MultiFab Forcing_tmp(S_new.boxArray(),S_new.DistributionMap(),nspecies+1,0);
+#endif
         Forcing_tmp.setVal(0);
 
         getLevel(k).advance_chemistry(S_new,S_tmp,dt_save[k]/2.0,Forcing_tmp,0);
@@ -4922,7 +4925,11 @@ PeleLM::advance (Real time,
 
     // create S^{n+1/2} by averaging old and new
     BL_PROFILE_VAR_START(HTMAC);
+#ifdef USE_EFIELD	 
+    MultiFab Forcing(grids,dmap,nspecies+2,nGrowAdvForcing);
+#else
     MultiFab Forcing(grids,dmap,nspecies+1,nGrowAdvForcing);
+#endif
     Forcing.setBndry(1.e30);
     FillPatch(*this,mac_divu,nGrowAdvForcing,time+0.5*dt,Divu_Type,0,1,0);
     BL_PROFILE_VAR_STOP(HTMAC);
@@ -5195,6 +5202,7 @@ PeleLM::advance (Real time,
     Dhat.clear();
 
     if (verbose) amrex::Print() << "R (SDC corrector " << sdc_iter << ")\n";
+	 Forcing.setVal(0.0,nspecies+1,1,0);
 
     showMF("sdc",S_old,"sdc_Sold_before_R",level,sdc_iter,parent->levelSteps(level));
     showMF("sdc",Forcing,"sdc_Forcing_before_R",level,sdc_iter,parent->levelSteps(level));
@@ -5259,13 +5267,17 @@ PeleLM::advance (Real time,
         T.resize(box,1);
         T.setVal(298.15,box);
         
-        enthi.resize(box,R.nComp());
+		  int ncomp = R.nComp(); 
+#ifdef USE_EFIELD		  
+		  ncomp = R.nComp()-1;
+#endif
+        enthi.resize(box,ncomp);
         getHGivenT_pphys(enthi,T,box,0,0);
-        enthi.mult(R[mfi],box,0,0,R.nComp());
+        enthi.mult(R[mfi],box,0,0,ncomp);
         
         // Form heat release
         (*auxDiag["HEATRELEASE"])[mfi].setVal(0,box);
-        for (int j=0; j<R.nComp(); ++j)
+        for (int j=0; j<ncomp; ++j)
         {
           (*auxDiag["HEATRELEASE"])[mfi].minus(enthi,box,j,0,1);
         }
@@ -5627,7 +5639,11 @@ PeleLM::advance_chemistry (MultiFab&       mf_old,
     DistributionMapping dm = getFuncCountDM(ba,ngrow);
 
     MultiFab diagTemp;
+#ifdef USE_EFIELD	 
+    MultiFab STemp(ba, dm, nspecies+5, 0);
+#else
     MultiFab STemp(ba, dm, nspecies+3, 0);
+#endif
     MultiFab fcnCntTemp(ba, dm, 1, 0);
     MultiFab FTemp(ba, dm, Force.nComp(), 0);
 
@@ -5639,11 +5655,16 @@ PeleLM::advance_chemistry (MultiFab&       mf_old,
         diagTemp.copy(*auxDiag["REACTIONS"]); // Parallel copy
     }
 
+#ifdef USE_EFIELD	 
+    STemp.copy(mf_old,first_spec,0,nspecies+5); // Parallel copy.
+#else
+    STemp.copy(mf_old,first_spec,0,nspecies+3); // Parallel copy.
+#endif
+    FTemp.copy(Force);                          // Parallel copy.
+
     if (verbose) 
       amrex::Print() << "*** advance_chemistry: FABs in tmp MF: " << STemp.size() << '\n';
 
-    STemp.copy(mf_old,first_spec,0,nspecies+3); // Parallel copy.
-    FTemp.copy(Force);                          // Parallel copy.
 #ifdef _OPENMP
 #pragma omp parallel
 #endif  
@@ -5679,8 +5700,13 @@ PeleLM::advance_chemistry (MultiFab&       mf_old,
       const auto fcl    = fc.view(lo);
       const auto frcing = frc.view(lo);
       
+#ifdef USE_EFIELD		
+      double tmp_vect[(nspecies+2)];
+      double tmp_src_vect[(nspecies+1)];
+#else
       double tmp_vect[(nspecies+1)];
       double tmp_src_vect[nspecies];
+#endif
       double tmp_vect_energy[1];
       double tmp_src_vect_energy[1];
       for         (int k = 0; k < len.z; ++k) {
@@ -5693,6 +5719,10 @@ PeleLM::advance_chemistry (MultiFab&       mf_old,
 		  				tmp_vect[nspecies]     = rhoY(i,j,k,nspecies+2);
 		  				tmp_vect_energy[0]     = rhoY(i,j,k,nspecies) * 10.0;
 		  				tmp_src_vect_energy[0] = frcing(i,j,k,nspecies) * 10.0;
+#ifdef USE_EFIELD						
+						tmp_vect[nspecies+1]   = rhoY(i,j,k,nspecies+4) * 1.e-6;
+						tmp_src_vect[nspecies] = frcing(i,j,k,nspecies+1) * 1.e-6;
+#endif
                   fcl(i,j,k) = react(tmp_vect, tmp_src_vect,
 				  								 tmp_vect_energy, tmp_src_vect_energy,
 				  							  	 &pressure, &dt_incr, &time_init, &reInit);
@@ -5712,17 +5742,30 @@ PeleLM::advance_chemistry (MultiFab&       mf_old,
                   if (rhoY(i,j,k,nspecies) != rhoY(i,j,k,nspecies)) {
                      amrex::Abort("NaNs !! ");
                   }
+#ifdef USE_EFIELD
+	          		rhoY(i,j,k,nspecies+4) = tmp_vect[nspecies+1] * 1.0e6;
+                  if (rhoY(i,j,k,nspecies) != rhoY(i,j,k,nspecies)) {
+                     amrex::Abort("NaNs !! ");
+                  }
+//						amrex::Print() << "fcl : " << fcl(i,j,k) << "\n";
+#endif
               }
           }
       }
 
     }
 
+    if (verbose) 
+      amrex::Print() << "*** advance_chemistry: Done with MFiter \n";
+
     FTemp.clear();
-
+#ifdef USE_EFIELD	 
+    mf_new.copy(STemp,0,first_spec,nspecies+5); // Parallel copy.
+#else
     mf_new.copy(STemp,0,first_spec,nspecies+3); // Parallel copy.
-
+#endif
     STemp.clear();
+
     //
     // Set React_new (I_R).
     //
@@ -5733,6 +5776,14 @@ PeleLM::advance_chemistry (MultiFab&       mf_old,
     React_new.mult(-1/dt);
 
     MultiFab::Subtract(React_new, Force, 0, 0, nspecies, 0);
+
+#ifdef USE_EFIELD	 
+//	 amrex::Print() << React_new.nComp() << " " << Force.nComp() << " " << nspecies << "\n";
+    MultiFab::Copy(React_new, mf_old, nE, nspecies, 1, 0);
+    MultiFab::Subtract(React_new, mf_new, nE, nspecies, 1, 0);
+	 React_new.mult(-1/dt,nspecies,1,0);
+	 MultiFab::Subtract(React_new, Force, nspecies+1, nspecies, 1, 0);
+#endif
 
     if (do_diag)
     {
