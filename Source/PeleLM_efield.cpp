@@ -560,7 +560,7 @@ void PeleLM::ef_get_edge_transport(MultiFab *Ke_ec[BL_SPACEDIM],
 
 	amrex::Print() << " Computing edge based elec transport prop. \n";
    for (MFIter mfi(diffElec_cc,true); mfi.isValid(); ++mfi) {
-	   const Box& box = mfi.validbox();
+	   const Box& box = mfi.tilebox();
 
       for (int dir = 0; dir < BL_SPACEDIM; dir++) {
          FPLoc bc_lo = fpi_phys_loc(get_desc_lst()[State_Type].getBC(nE).lo(dir));
@@ -676,7 +676,7 @@ void PeleLM::compute_ne_convection_term(const Real      &dt,
 		advectionTypeLcl[0] = Conservative;
    
    	for (MFIter mfi(nE_new,false); mfi.isValid(); ++mfi) {
-   		const Box& bx = mfi.validbox();
+   		const Box& bx = mfi.tilebox();
    		const FArrayBox& neFab = nE_new[mfi];
    		const FArrayBox& force = pnp_gdnv[mfi];
    		const FArrayBox& divu  = DivU[mfi];
@@ -686,7 +686,7 @@ void PeleLM::compute_ne_convection_term(const Real      &dt,
    			cflux[d].resize(ebx,1);
    			edgstate[d].resize(ebx,1);
    		}
-   		conv_ne[mfi].setVal(0.0);
+   		conv_ne[mfi].setVal(0.0,bx,0,1);
    
    		state_bc = fetchBCArray(State_Type,bx,nE,1);
    
@@ -1054,7 +1054,7 @@ void PeleLM::ef_setUpPrecond (const Real      &dt,
       FluxBoxes edgeCoeff(this, 1, 1);
       neKe_ec = edgeCoeff.get();
       for (MFIter mfi(nEtKappaE); mfi.isValid(); ++mfi) {
-	      const Box& box = mfi.validbox();
+	      const Box& box = mfi.tilebox();
 
          for (int dir = 0; dir < BL_SPACEDIM; dir++) {
             FPLoc bc_lo = fpi_phys_loc(get_desc_lst()[State_Type].getBC(nE).lo(dir));
