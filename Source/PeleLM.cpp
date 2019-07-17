@@ -41,6 +41,7 @@
 #include <DERIVE_F.H>
 
 #include <AMReX_buildInfo.H>
+#include "PeleLM_advection.H" 
 
 using namespace amrex;
 
@@ -5741,8 +5742,8 @@ PeleLM::compute_scalar_advection_fluxes_and_divergence (const MultiFab& Force,
     const Box& bx = S_mfi.tilebox();
 //    const FArrayBox& divu = DivU[S_mfi];
 //    const FArrayBox& force = Force[S_mfi];
-    auto const divu = DivU.array(S_mfi); 
-    auto const force = Force.array(S_mfi); 
+    const auto divu = DivU.array(S_mfi); 
+    const auto force = Force.array(S_mfi); 
     
     
 
@@ -5752,7 +5753,17 @@ PeleLM::compute_scalar_advection_fluxes_and_divergence (const MultiFab& Force,
       cflux[d].resize(ebx,nspecies+1);
       edgstate[d].resize(ebx,nspecies+1);
     }
-     
+    Elixir edg1 = edgstate[0].elixir();
+    Elixir cfxe = cflux[0].elixir();  
+#if AMREX_SPACEDIM >= 2
+    Elixir edg2 = edgstate[1].elixir(); 
+    Elixir cfye = cflux[1].elixir(); 
+#if AMREX_SPACEDIM ==3
+    Elixir edg3 = edgstate[2].elixir(); 
+    Elixir cfze = cflux[2].elixir(); 
+#endif
+#endif
+ 
     (*aofs)[S_mfi].setVal(0,bx,Density,NUM_SCALARS);
     for (int d=0; d<BL_SPACEDIM; ++d)
     {
@@ -5762,9 +5773,28 @@ PeleLM::compute_scalar_advection_fluxes_and_divergence (const MultiFab& Force,
     } 
         
     state_bc = fetchBCArray(State_Type,bx,first_spec,nspecies+1);
+    amrex::GpuArray<BCRec, NCOMP> BCs; 
+    for(int n = 0; n < NCOMP; ++n){
+        setBC(bx, geom.Domain(), (state[State_Type].descriptor())->getBC(first_spec + n), BCs[n]); 
+    }
+    auto aofsarr = aofs->array(S_mfi); 
 // TODO change this from a IAMR CPU funct to PeleLM GPU op 
     // Note that the FPU argument is no longer used in IAMR->Godunov.cpp because FPU is now default
-//    PeleLM_AdvectScalars(bx, dx, dt, 
+    PeleLM_AdvectScalars(bx, dx, dt,  D_DECL((area[0]).array(S_mfi), 
+                                             (area[1]).array(S_mfi), 
+                                             (area[2]).array(S_mfi)), 
+                                      D_DECL((u_mac[0]).array(S_mfi), 
+                                             (u_mac[1]).array(S_mfi),
+                                             (u_mac[2]).array(S_mfi)),
+                                      D_DECL((cflux[0]).array(),
+                                             (cflux[1]).array(), 
+                                             (cflux[2]).array()), 
+                                      D_DECL( edgstate[0].array(), 
+                                              edgstate[1].array(), 
+                                              edgstate[2].array()),
+                                      Smf.array(S_mfi), force, divu, 
+                                      aofsarr, advectionType, BCs, volume.array(S_mfi));
+ 
 /*    godunov->AdvectScalars(bx, dx, dt, 
                            D_DECL(  area[0][S_mfi],  area[1][S_mfi],  area[2][S_mfi]),
                            D_DECL( u_mac[0][S_mfi], u_mac[1][S_mfi], u_mac[2][S_mfi]),
