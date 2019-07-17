@@ -1,2 +1,1 @@
-#CEXE_sources += 
-#CEXE_headers += 
+CEXE_HEADERS+= PeleLM_index_macros.H

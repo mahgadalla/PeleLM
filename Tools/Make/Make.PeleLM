@@ -4,6 +4,7 @@ EBASE = PeleLM
 include $(AMREX_HOME)/Tools/GNUMake/Make.defs 
 
 Bdirs += $(PELELM_HOME)/Source $(PELELM_HOME)/Source/Src_$(DIM)d
+Bdirs += $(PELELM_HOME)/Source/gpu $(PELELM_HOME)/Source/gpu/advection
 
 ifeq ($(USE_WBAR),TRUE)
     USERSuffix += .WBAR

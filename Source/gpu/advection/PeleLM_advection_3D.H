@@ -2,7 +2,7 @@
 #define PELELM_ADVECTION_3D_H
 #include <AMReX_Gpu.H> 
 #include <AMReX_FArrayBox.H> 
-
+#include <PeleLM_index_macros.H>
 
 /* This header file contains the inlined __host__ __device__ functions required for 
    the scalar advection routines for PeleLM 3D. It also contains fuction declarations 
@@ -39,18 +39,18 @@ inline void PeleLM_ppm(const int i, const int j, const int k, const int n,
         amrex::Real d1 = vanLeer(s1, S(i+1,j,k,n), s2); 
         amrex::Real d2 = vanLeer(s2, s1, S(i-2,j,k,n)); 
         sedge1 = 0.5e0*(s1 + s2) - 1.e0/6.e0*(d1 - d2); 
-        sedge1 = amrex::max(sedge1, amrex::min(s1, s2); 
-        sedge1 = amrex::min(sedge1, amrex::max(s1, s2); 
+        sedge1 = amrex::max(sedge1, amrex::min(s1, s2)); 
+        sedge1 = amrex::min(sedge1, amrex::max(s1, s2)); 
 
         amrex::Real s3 = s2;
         s2 = s1; 
         s1 = S(i+1,j,k,n); 
         
         d1 = vanLeer(s1, S(i+2, j, k,n), s2); 
-        d2 = vanleer(s2, s1, s3);
+        d2 = vanLeer(s2, s1, s3);
         sedge2 = 0.5e0*(s1 + s2) - 1.e0/6.e0*(d1 - d2); 
-        sedge2 = amrex::max(sedge2, amrex::min(s1, s2); 
-        sedge2 = amrex::min(sedge2, amrex::max(s1, s2); 
+        sedge2 = amrex::max(sedge2, amrex::min(s1, s2)); 
+        sedge2 = amrex::min(sedge2, amrex::max(s1, s2)); 
         
         sm = sedge1; 
         sp = sedge2;         
@@ -88,18 +88,18 @@ inline void PeleLM_ppm(const int i, const int j, const int k, const int n,
         amrex::Real d1 = vanLeer(s1, S(i,j+1,k,n), s2); 
         amrex::Real d2 = vanLeer(s2, s1, S(i,j-2,k,n)); 
         sedge1 = 0.5e0*(s1 + s2) - 1.e0/6.e0*(d1 - d2); 
-        sedge1 = amrex::max(sedge1, amrex::min(s1, s2); 
-        sedge1 = amrex::min(sedge1, amrex::max(s1, s2); 
+        sedge1 = amrex::max(sedge1, amrex::min(s1, s2)); 
+        sedge1 = amrex::min(sedge1, amrex::max(s1, s2)); 
 
         amrex::Real s3 = s2;
         s2 = s1; 
         s1 = S(i,j+1,k,n); 
         
         d1 = vanLeer(s1, S(i, j+2, k,n), s2); 
-        d2 = vanleer(s2, s1, s3);
+        d2 = vanLeer(s2, s1, s3);
         sedge2 = 0.5e0*(s1 + s2) - 1.e0/6.e0*(d1 - d2); 
-        sedge2 = amrex::max(sedge2, amrex::min(s1, s2); 
-        sedge2 = amrex::min(sedge2, amrex::max(s1, s2); 
+        sedge2 = amrex::max(sedge2, amrex::min(s1, s2)); 
+        sedge2 = amrex::min(sedge2, amrex::max(s1, s2)); 
         
         sm = sedge1; 
         sp = sedge2;         
@@ -134,18 +134,18 @@ inline void PeleLM_ppm(const int i, const int j, const int k, const int n,
         amrex::Real d1 = vanLeer(s1, S(i,j,k+1,n), s2); 
         amrex::Real d2 = vanLeer(s2, s1, S(i,j,k-2,n)); 
         sedge1 = 0.5e0*(s1 + s2) - 1.e0/6.e0*(d1 - d2); 
-        sedge1 = amrex::max(sedge1, amrex::min(s1, s2); 
-        sedge1 = amrex::min(sedge1, amrex::max(s1, s2); 
+        sedge1 = amrex::max(sedge1, amrex::min(s1, s2)); 
+        sedge1 = amrex::min(sedge1, amrex::max(s1, s2)); 
 
         amrex::Real s3 = s2;
         s2 = s1; 
         s1 = S(i,j,k+1,n); 
         
         d1 = vanLeer(s1, S(i, j, k+2,n), s2); 
-        d2 = vanleer(s2, s1, s3);
+        d2 = vanLeer(s2, s1, s3);
         sedge2 = 0.5e0*(s1 + s2) - 1.e0/6.e0*(d1 - d2); 
-        sedge2 = amrex::max(sedge2, amrex::min(s1, s2); 
-        sedge2 = amrex::min(sedge2, amrex::max(s1, s2); 
+        sedge2 = amrex::max(sedge2, amrex::min(s1, s2)); 
+        sedge2 = amrex::min(sedge2, amrex::max(s1, s2)); 
         
         sm = sedge1; 
         sp = sedge2;         
@@ -177,6 +177,166 @@ inline void PeleLM_ppm(const int i, const int j, const int k, const int n,
     }
     //TODO Deal with BCs look in IAMR Godunov for this ppm_()dir functions  
 }
+
+AMREX_GPU_HOST_DEVICE
+inline void PeleLM_corner_couple(const int i, const int j, const int k, const int n, 
+                                 const amrex::Real dt, const amrex::Real dx1, 
+                                 const amrex::Real dx2, const int iconserv[], 
+                                 const amrex::Array4<const amrex::Real> &lo, 
+                                 const amrex::Array4<const amrex::Real> &hi,  
+                                 const amrex::Array4<const amrex::Real> &s, 
+                                 const amrex::Array4<const amrex::Real> &divu, 
+                                 const amrex::Array4<const amrex::Real> &mac1,         
+                                 const amrex::Array4<const amrex::Real> &mac2,
+                                 const amrex::Array4<const amrex::Real> &state1, 
+                                 const amrex::Array4<const amrex::Real> &state2, 
+                                 const amrex::Array4<amrex::Real> &lo1, 
+                                 const amrex::Array4<amrex::Real> &hi1,
+                                 const amrex::Array4<amrex::Real> &lo2, 
+                                 const amrex::Array4<amrex::Real> &hi2,                  
+                                 const int dir)
+{
+//=========================== X ====================================================
+    if(dir ==0){
+        if(iconserv[n]){
+        //xylo xyhi 
+                lo1(i,j,k,n)  = lo(i, j, k, n)
+                              - dt/(3.e0*dx1)*(state1(i-1,j+1,k,n)*mac1(i-1,j+1,k)
+                              - state1(i-1,j,k,n)*mac1(i-1,j,k))
+                              - dt/3.e0*s(i-1,j,k,n)*divu(i-1,j,k)
+                              + dt/(3.e0*dx1)*s(i-1,j,k,n)*(mac1(i-1,j+1,k)-mac1(i-1,j,k));
+
+                hi1(i,j,k,n)  = hi(i, j, k, n)
+                              - dt/(3.e0*dx1)*(state1(i,j+1,k,n)*mac1(i,j+1,k)
+                              - state1(i,j,k,n)*umac1(i,j,k))
+                              - dt/3.e0*s(i,j,k,n)*divu(i,j,k)
+                              + dt/(3.e0*dx1)*s(i,j,k,n)*(mac1(i,j+1,k)-mac1(i,j,k));
+
+        //xzlo xzhi 
+                lo2(i,j,k,n)  = lo(i,j,k,n)
+                              - dt/(3.e0*dx2)*(state2(i-1,j,k+1,n)*mac2(i-1,j,k+1)
+                              - state2(i-1,j,k,n)*mac2(i-1,j,k))
+                              - dt/(3.e0)*s(i-1,j,k,n)*divu(i-1,j,k)
+                              + dt/(3.e0*dx2)*s(i-1,j,k,n)*(mac2(i-1,j,k+1) - mac2(i-1,j,k));
+
+                hi2(i,j,k,n)  = hi(i,j,k,n)
+                              - dt/(3.e0*dx2)*(state2(i,j,k+1,n)*mac2(i,j,k+1)
+                              - state2(i,j,k,n)*mac2(i,j,k))
+                              - dt/(3.e0)*s(i,j,k,n)*divu(i,j,k)
+                              + dt/(3.e0*dx2)*s(i,j,k,n)*(mac2(i,j,k+1) - mac2(i,j,k));
+            }
+        else{
+               lo1(i,j,k,n)  = lo(i,j,k,n)
+                             - dt/(6.e0*dx1)*(mac1(i-1,j+1,k) + mac1(i-1,j,k))
+                             * (state1(i-1,j+1,k,n) - state1(i-1,j,k,n));
+               hi1(i,j,k,n)  = hi(i,j,k,n)
+                             - dt/(6.e0*dx1)*(mac1(i,j+1,k) + mac1(i,j,k))
+                             * (state1(i, j+1,k, n) - state1(i, j, k, n));
+
+               lo2(i,j,k,n)  = lo(i,j,k,n)
+                             - dt/(6.e0*dx2)*(mac2(i-1,j,k+1) + mac2(i-1,j,k))
+                             * (state2(i-1,j,k+1,n) - state2(i-1,j,k,n)); 
+                
+               hi2(i,j,k,n)  = hi(i,j,k,n) 
+                             - dt/(6.e0*dx2)*(mac2(i,j,k+1) + mac2(i,j,k))
+                             * (state2(i,j,k+1,n) - state2(i,j,k,n)); 
+        }
+    }
+//=========================== Y ========================================================
+    if(dir==1){
+        if(iconserv[n]){
+        //yxlo yxhi 
+                lo1(i,j,k,n)  = lo(i,j,k,n) 
+                              - dt/(3.e0*dx1)*(state1(i+1,j-1,k,n)*mac1(i+1,j-1,k)
+                              - state1(i,j-1,k,n)*mac1(i,j-1,k))
+                              - dt/(3.e0)*s(i,j-1,k,n)*divu(i,j-1,k)
+                              + dt/(3.e0*dx1)*s(i,j-1,k,n)*(mac1(i+1,j-1,k)-mac1(i,j-1,k));
+
+                hi1(i,j,k,n)  = hi(i,j,k,n) 
+                              - dt/(3.e0*dx1)*(state1(i+1,j,k,n)*mac1(i+1,j,k)
+                              - state1(i,j,k,n)*mac1(i,j,k))
+                              - dt/(3.e0)*s(i,j,k,n)*divu(i,j,k) 
+                              + dt/(3.e0*dx1)*s(i,j,k,n)*(mac1(i+1,j,k) - mac1(i,j,k));
+
+        //yzlo yzhi         
+                lo2(i,j,k,n)  = lo(i,j,k,n) 
+                              - dt/(3.e0*dx2)*(state2(i,j-1,k+1,n)*mac2(i,j-1,k+1)
+                              - state2(i,j-1,k,n)*mac2(i,j-1,k))
+                              - dt/(3.e0)*s(i,j-1,k,n)*divu(i,j-1,k)
+                              + dt/(3.e0*dx2)*s(i,j-1,k,n)*(mac2(i,j-1,k+1)-mac2(i,j-1,k));
+
+                hi2(i,j,k,n)  = hi(i,j,k,n) 
+                              - dt/(3.e0*dx2)*(state2(i,j,k+1,n)*mac2(i,j,k+1)
+                              - state2(i,j,k,n)*mac2(i,j,k))
+                              - dt/(3.e0)*s(i,j,k,n)*divu(i,j,k) 
+                              + dt/(3.e0*dx2)*s(,j,k,n)*(mac2(i,j,k+1) - mac2(i,j,k));
+        }
+        else{
+               lo1(i,j,k,n)  = lo(i,j,k,n)
+                             - dt/(6.e0*dx1)*(mac1(i+1,j-1,k) + mac1(i,j-1,k))
+                             * (state1(i+1,j-1,k,n) - state1(i,j-1,k,n));
+               hi1(i,j,k,n)  = hi(i,j,k,n)
+                             - dt/(6.e0*dx1)*(mac1(i+1,j,k) + mac1(i,j,k))
+                             * (state1(i+1, j,k, n) - state1(i, j, k, n));
+
+               lo2(i,j,k,n)  = lo(i,j,k,n)
+                             - dt/(6.e0*dx2)*(mac2(i,j-1,k+1) + mac2(i,j-1,k))
+                             * (state2(i,j-1,k+1,n) - state2(i,j-1,k,n)); 
+                
+               hi2(i,j,k,n)  = hi(i,j,k,n) 
+                             - dt/(6.e0*dx2)*(mac2(i,j,k+1) + mac2(i,j,k))
+                             * (state2(i,j,k+1,n) - state2(i,j,k,n)); 
+        }
+    }
+//=========================== Z ======================================================    
+    if(dir==2){
+        if(iconserv[n]){
+        //zxlo zxhi 
+                lo1(i,j,k,n)  = lo(i,j,k,n) 
+                              - dt/(3.e0*dx1)*(state1(i+1,j,k-1,n)*mac1(i+1,j,k-1)
+                              - state1(i,j,k-1,n)*mac1(i,j,k-1))
+                              - dt/(3.e0)*s(i,j,k-1,n)*divu(i,j,k-1)
+                              + dt/(3.e0*dx1)*s(i,j,k-1,n)*(mac1(i+1,j,k-1)-mac1(i,j,k-1));
+
+                hi1(i,j,k,n)  = hi(i,j,k,n) 
+                              - dt/(3.e0*dx1)*(state1(i+1,j,k,n)*mac1(i+1,j,k)
+                              - state1(i,j,k,n)*mac1(i,j,k))
+                              - dt/(3.e0)*s(i,j,k,n)*divu(i,j,k) 
+                              + dt/(3.e0*dx1)*s(i,j,k,n)*(mac1(i+1,j,k) - mac1(i,j,k));
+
+        //zylo zyhi         
+                lo2(i,j,k,n)  = lo(i,j,k,n) 
+                              - dt/(3.e0*dx2)*(state2(i,j+1,k-1,n)*mac2(i,j+1,k-1)
+                              - state2(i,j,k-1,n)*mac2(i,j,k-1))
+                              - dt/(3.e0)*s(i,j,k-1,n)*divu(i,j,k-1)
+                              + dt/(3.e0*dx2)*s(i,j,k-1,n)*(mac2(i,j+1,k-1)-mac2(i,j,k-1));
+
+                hi2(i,j,k,n)  = hi(i,j,k,n) 
+                              - dt/(3.e0*dx2)*(state2(i,j+1,k,n)*mac2(i,j+1,k)
+                              - state2(i,j,k,n)*mac2(i,j,k))
+                              - dt/(3.e0)*s(i,j,k,n)*divu(i,j,k) 
+                              + dt/(3.e0*dx2)*s(i,j,k,n)*(mac2(i,j+1,k) - mac2(i,j,k));
+        }
+        else{
+               lo1(i,j,k,n)  = lo(i,j,k,n)
+                             - dt/(6.e0*dx1)*(mac1(i+1,j,k-1) + mac1(i,j,k-1))
+                             * (state1(i+1,j,k-1,n) - state1(i,j,k-1,n));
+               hi1(i,j,k,n)  = hi(i,j,k,n)
+                             - dt/(6.e0*dx1)*(mac1(i+1,j,k) + mac1(i,j,k))
+                             * (state1(i+1, j,k, n) - state1(i, j, k, n));
+
+               lo2(i,j,k,n)  = lo(i,j,k,n)
+                             - dt/(6.e0*dx2)*(mac2(i,j+1,k-1) + mac2(i,j,k-1))
+                             * (state2(i,j+1,k-1,n) - state2(i,j,k-1,n)); 
+                
+               hi2(i,j,k,n)  = hi(i,j,k,n) 
+                             - dt/(6.e0*dx2)*(mac2(i,j+1,k) + mac2(i,j,k))
+                             * (state2(i,j+1,k,n) - state2(i,j,k,n)); 
+        }
+    }
+
+}
+
                     
 void PeleLM_estate_fpu(const amrex::Box bx,
                        const amrex::Array4<const amrex::Real> &s, 
@@ -189,6 +349,6 @@ void PeleLM_estate_fpu(const amrex::Box bx,
                        const amrex::Array4<amrex::Real> &ystate, 
                        const amrex::Array4<amrex::Real> &zstate, 
                        const amrex::Real dt, const amrex::Real dx[], 
-                       const int iconserv[NVAR]);
+                       const int iconserv[]);
 
 #endif 

@@ -5764,14 +5764,14 @@ PeleLM::compute_scalar_advection_fluxes_and_divergence (const MultiFab& Force,
     state_bc = fetchBCArray(State_Type,bx,first_spec,nspecies+1);
 // TODO change this from a IAMR CPU funct to PeleLM GPU op 
     // Note that the FPU argument is no longer used in IAMR->Godunov.cpp because FPU is now default
-    PeleLM_AdvectScalars(bx, dx, dt, 
-    godunov->AdvectScalars(bx, dx, dt, 
+//    PeleLM_AdvectScalars(bx, dx, dt, 
+/*    godunov->AdvectScalars(bx, dx, dt, 
                            D_DECL(  area[0][S_mfi],  area[1][S_mfi],  area[2][S_mfi]),
                            D_DECL( u_mac[0][S_mfi], u_mac[1][S_mfi], u_mac[2][S_mfi]),
                            D_DECL(cflux[0],cflux[1],cflux[2]),
                            D_DECL(edgstate[0],edgstate[1],edgstate[2]),
                            Smf[S_mfi], 0, nspecies+1 , force, 0, divu, 0,
-                           (*aofs)[S_mfi], first_spec, advectionType, state_bc, FPU, volume[S_mfi]);
+                           (*aofs)[S_mfi], first_spec, advectionType, state_bc, FPU, volume[S_mfi]); */
        
     // Accumulate rho flux divergence, rho on edges, and rho flux on edges
 // TODO these are all CPU fab functions.     
