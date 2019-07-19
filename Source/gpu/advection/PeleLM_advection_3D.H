@@ -241,8 +241,8 @@ inline void PeleLM_ppm(const int i, const int j, const int k, const int n,
         
         PeleLM_ppm_xbc(i, j, k, n, sm, sp, sedge1, S, bc.lo(0), bc.hi(0), domlo, domhi); 
         amrex::Real s6 = 6.e0*s2- 3.e0*(sm + sp); 
-        amrex::Real sigmap = std::abs(vel_edge(i+1,j,k))*dx/dt;
-        amrex::Real sigmam = std::abs(vel_edge(i,j,k))*dx/dt;
+        amrex::Real sigmap = std::abs(vel_edge(i+1,j,k))*dt/dx; 
+        amrex::Real sigmam = std::abs(vel_edge(i,j,k))*dt/dx;
 
         if(vel_edge(i+1,j,k) > 1.e-10){
             Ip(i,j,k,n) = sp - (0.5*sigmap)*((sp - sm) -
@@ -292,8 +292,8 @@ inline void PeleLM_ppm(const int i, const int j, const int k, const int n,
         PeleLM_ppm_ybc(i, j, k, n, sm, sp, sedge1, S, bc.lo(1), bc.hi(1), domlo, domhi); 
 
         amrex::Real s6 = 6.e0*s2- 3.e0*(sm + sp); 
-        amrex::Real sigmap = std::abs(vel_edge(i,j+1,k))*dx/dt; 
-        amrex::Real sigmam = std::abs(vel_edge(i,j,k))*dx/dt;
+        amrex::Real sigmap = std::abs(vel_edge(i,j+1,k))*dt/dx; 
+        amrex::Real sigmam = std::abs(vel_edge(i,j,k))*dt/dx;
         if(vel_edge(i,j+1,k) > 1.e-10)
             Ip(i,j,k,n) = sp - (0.5*sigmap)*((sp - sm) -
                                              (1.e0 -2.e0/3.e0*sigmap)*s6); 
@@ -340,19 +340,20 @@ inline void PeleLM_ppm(const int i, const int j, const int k, const int n,
         PeleLM_ppm_zbc(i, j, k, n, sm, sp, sedge1,S, bc.lo(2), bc.hi(2), domlo, domhi); 
 
         amrex::Real s6 = 6.e0*s2- 3.e0*(sm + sp); 
-        amrex::Real sigmap = std::abs(vel_edge(i,j,k+1))*dx/dt; 
-        amrex::Real sigmam = std::abs(vel_edge(i,j,k))*dx/dt;
+        amrex::Real sigmap = std::abs(vel_edge(i,j,k+1))*dt/dx; 
+        amrex::Real sigmam = std::abs(vel_edge(i,j,k))*dt/dx;
         if(vel_edge(i,j,k+1) > 1.e-10)
             Ip(i,j,k,n) = sp - (0.5*sigmap)*((sp - sm) -
                                              (1.e0 -2.e0/3.e0*sigmap)*s6); 
         else
-            Ip(i,j,k,n) = s2; 
+            Ip(i,j,k,n) = s2;
+
 
         if(vel_edge(i,j,k) < -1.e-10)
             Im(i,j,k,n) = sm + (0.5*sigmam)*((sp-sm) - 
                                             (1.e0 - 2.e0/3.e0*sigmam)*s6); 
         else
-            Im(i,j,k,n) = s2; 
+            Im(i,j,k,n) = s2;
 
     }
 }
@@ -368,8 +369,8 @@ inline void PeleLM_trans_xbc(const int i, const int j, const int k, const int n,
                              bool ycouple, bool zcouple)
 {
 // Lower X
-    if(ycouple && (j<= domlo[1] || j >= domhi[1])) return; 
-    if(zcouple && (k<= domlo[2] || k>= domhi[2])) return;
+    if(ycouple && (j< domlo[1] || j > domhi[1])) return; 
+    if(zcouple && (k< domlo[2] || k > domhi[2])) return;
     const int domlox = domlo[0], domhix = domhi[0]; 
     if(i <= domlox){ 
         if(bclo==EXT_DIR){
@@ -382,7 +383,7 @@ inline void PeleLM_trans_xbc(const int i, const int j, const int k, const int n,
                     lo = s(domlox, j, k, n); 
             }
             else{
-                amrex::Real st = (uedge(i,j,k) <= 1e-10) ? hi : s(domlox-1,j,k,n); 
+                amrex::Real st = (uedge(domlox,j,k) <= 1e-10) ? hi : s(domlox-1,j,k,n); 
                 lo = st; 
                 hi = st; 
             }
@@ -408,7 +409,7 @@ inline void PeleLM_trans_xbc(const int i, const int j, const int k, const int n,
                 else hi = lo; 
             }
             else{
-                amrex::Real st = (uedge(i,j,k) >= -1e-10)? lo : s(domhix,j,k,n); 
+                amrex::Real st = (uedge(domhix,j,k) >= -1e-10)? lo : s(domhix,j,k,n); 
                 lo = st; 
                 hi = st; 
             }
@@ -429,9 +430,13 @@ inline void PeleLM_trans_ybc(const int i, const int j, const int k, const int n,
                              amrex::Real &lo, amrex::Real hi, 
                              const amrex::Array4< const amrex::Real> &vedge, 
                              const int bclo, const int bchi, 
-                             const int domloy, const int domhiy)
+                             const int domlo[], const int domhi[], 
+                             bool xcouple, bool zcouple)
 {
 // Lower X 
+    if(xcouple && (i < domlo[0] || i > domhi[0])) return; 
+    if(zcouple && (k < domlo[2] || k > domhi[2])) return; 
+    const int domloy = domlo[1], domhiy = domhi[1]; 
     if(j <= domloy){ 
         if(bclo==EXT_DIR){
             if(n == YVEL){
@@ -490,13 +495,17 @@ inline void PeleLM_trans_zbc(const int i, const int j, const int k, const int n,
                              amrex::Real &lo, amrex::Real hi, 
                              const amrex::Array4< const amrex::Real> &wedge, 
                              const int bclo, const int bchi, 
-                             const int domloz, const int domhiz)
+                             const int domlo[], const int domhi[],
+                             bool xcouple, bool ycouple)
 {
+    if(xcouple && (i < domlo[0] || i > domhi[0])) return; 
+    if(ycouple && (j < domlo[1] || j > domhi[1])) return; 
+    const int domloz = domlo[2], domhiz = domhi[2]; 
 // Lower Z
     if(k <= domloz){ 
         if(bclo==EXT_DIR){
             if(n == ZVEL){
-                if(wedge(i,j,k) >= 0.e0){
+                if(wedge(i,j,domloz) >= 0.e0){
                     lo = s(i, j, domloz-1, n); 
                     hi = s(i, j, domloz-1, n); 
                 }
