@@ -31,46 +31,47 @@ inline void PeleLM_ppm_xbc(const int i, const int j, const int k, const int n,
                            const int domlo, const int domhi)
 {
         if(bclo == EXT_DIR || bclo == HOEXTRAP){
-            if(i == domlo+1){
-                sedge = -0.2*s(i-2, j, k, n) + 0.75*s(i-1,j, k, n) 
-                       +  0.5*s(i,j,k,n) - 0.05*s(i+1,j,k,n); 
-                sedge = amrex::max(sedge, amrex::min(s(i,j,k,n), s(i+1,j,k,n))); 
-                sedge = amrex::min(sedge, amrex::max(s(i,j,k,n), s(i+1,j,k,n))); 
+            if(i == domlo) sm = s(domlo-1, j, k, n);            
+            else if(i == domlo+1){
+                sedge = -0.2*s(domlo-1, j, k, n) + 0.75*s(domlo,j, k, n) 
+                       +  0.5*s(domlo+1,j,k,n) - 0.05*s(domlo+2,j,k,n); 
+                sedge = amrex::max(sedge, amrex::min(s(domlo+1,j,k,n), s(domlo+2,j,k,n))); 
+                sedge = amrex::min(sedge, amrex::max(s(domlo+1,j,k,n), s(domlo+2,j,k,n))); 
 
                 sp = sedge; 
                 sm = sedge; 
-                if( (sp - s(i,j,k,n))*(s(i,j,k,n) - sm) <= 0.){
-                    sp = s(i,j,k,n); 
-                    sm = s(i,j,k,n); 
+                if( (sp - s(domlo+1,j,k,n))*(s(domlo+1,j,k,n) - sm) <= 0.){
+                    sp = s(domlo+1,j,k,n); 
+                    sm = s(domlo+1,j,k,n); 
                 }
-                else if(std::abs(sp - s(i,j,k,n)) >= 2.*std::abs(sm - s(i,j,k,n))){
-                    sp = 3.*s(i,j,k,n) - 2.*sm; 
+                else if(std::abs(sp - s(domlo+1,j,k,n)) >= 2.*std::abs(sm - s(domlo+1,j,k,n))){
+                    sp = 3.*s(domlo+1,j,k,n) - 2.*sm; 
                 }
-                else if(std::abs(sm - s(i,j,k,n)) >= 2.*std::abs(sp - s(i,j,k,n))){
-                    sm = 3.*s(i,j,k,n) - 2.*sp; 
+                else if(std::abs(sm - s(domlo+1,j,k,n)) >= 2.*std::abs(sp - s(domlo+1,j,k,n))){
+                    sm = 3.*s(domlo+1,j,k,n) - 2.*sp; 
                 } 
             }
 
         }
-
       if(bchi == EXT_DIR || bchi == HOEXTRAP){
-          if(i == domhi - 1){ 
-                sedge = -0.2*s(i+2, j, k, n) + 0.75*s(i+1,j, k, n) 
-                       +  0.5*s(i,j,k,n) - 0.05*s(i-1,j,k,n); 
-                sedge = amrex::max(sedge, amrex::min(s(i+1,j,k,n), s(i,j,k,n))); 
-                sedge = amrex::min(sedge, amrex::max(s(i+1,j,k,n), s(i,j,k,n))); 
+          if(i == domhi) sp = s(domhi,j,k,n); 
+          else if(i == domhi - 1){ 
+                sedge = -0.2*s(domhi+1, j, k, n) + 0.75*s(domhi,j, k, n) 
+                       +  0.5*s(domhi-1,j,k,n) - 0.05*s(domhi-2,j,k,n); 
+                sedge = amrex::max(sedge, amrex::min(s(domhi,j,k,n), s(domhi-1,j,k,n))); 
+                sedge = amrex::min(sedge, amrex::max(s(domhi,j,k,n), s(domhi-1,j,k,n))); 
 
                 sp = sedge; 
                 sm = sedge; 
-                if( (sp - s(i,j,k,n))*(s(i,j,k,n) - sm) <= 0.){
-                    sp = s(i,j,k,n); 
-                    sm = s(i,j,k,n); 
+                if( (sp - s(domhi-1,j,k,n))*(s(domhi-1,j,k,n) - sm) <= 0.){
+                    sp = s(domhi-1,j,k,n); 
+                    sm = s(domhi-1,j,k,n); 
                 }
-                else if(std::abs(sp - s(i,j,k,n)) >= 2.*std::abs(sm - s(i,j,k,n))){
-                    sp = 3.*s(i,j,k,n) - 2.*sm; 
+                else if(std::abs(sp - s(domhi-1,j,k,n)) >= 2.*std::abs(sm - s(domhi-1,j,k,n))){
+                    sp = 3.*s(domhi-1,j,k,n) - 2.*sm; 
                 }
-                else if(std::abs(sm - s(i,j,k,n)) >= 2.*std::abs(sp - s(i,j,k,n))){
-                    sm = 3.*s(i,j,k,n) - 2.*sp; 
+                else if(std::abs(sm - s(domhi-1,j,k,n)) >= 2.*std::abs(sp - s(domhi-1,j,k,n))){
+                    sm = 3.*s(domhi-1,j,k,n) - 2.*sp; 
                 } 
     
            }
@@ -86,46 +87,48 @@ inline void PeleLM_ppm_ybc(const int i, const int j, const int k, const int n,
                            const int domlo, const int domhi)
 {
         if(bclo == EXT_DIR || bclo == HOEXTRAP){
-            if(j == domlo+1){
-                sedge = -0.2*s(i, j-2, k, n) + 0.75*s(i,j-1, k, n) 
-                       +  0.5*s(i,j,k,n) - 0.05*s(i,j+1,k,n); 
-                sedge = amrex::max(sedge, amrex::min(s(i,j,k,n), s(i,j+1,k,n))); 
-                sedge = amrex::min(sedge, amrex::max(s(i,j,k,n), s(i,j+1,k,n))); 
+            if(j == domlo) sm = s(i,domlo-1,k,n); 
+            else if(j == domlo+1){
+                sedge = -0.2*s(i, domlo-1, k, n) + 0.75*s(i,domlo, k, n) 
+                       +  0.5*s(i,domlo+1,k,n) - 0.05*s(i,domlo+2,k,n); 
+                sedge = amrex::max(sedge, amrex::min(s(i,domlo+1,k,n), s(i,domlo+2,k,n))); 
+                sedge = amrex::min(sedge, amrex::max(s(i,domlo+1,k,n), s(i,domlo+2,k,n))); 
 
                 sp = sedge; 
                 sm = sedge; 
-                if( (sp - s(i,j,k,n))*(s(i,j,k,n) - sm) <= 0.){
-                    sp = s(i,j,k,n); 
-                    sm = s(i,j,k,n); 
+                if( (sp - s(i,domlo+1,k,n))*(s(i,domlo+1,k,n) - sm) <= 0.){
+                    sp = s(i,domlo+1,k,n); 
+                    sm = s(i,domlo+1,k,n); 
                 }
-                else if(std::abs(sp - s(i,j,k,n)) >= 2.*std::abs(sm - s(i,j,k,n))){
-                    sp = 3.*s(i,j,k,n) - 2.*sm; 
+                else if(std::abs(sp - s(i,domlo+1,k,n)) >= 2.*std::abs(sm - s(i,domlo+1,k,n))){
+                    sp = 3.*s(i,domlo+1,k,n) - 2.*sm; 
                 }
-                else if(std::abs(sm - s(i,j,k,n)) >= 2.*std::abs(sp - s(i,j,k,n))){
-                    sm = 3.*s(i,j,k,n) - 2.*sp; 
+                else if(std::abs(sm - s(i,domlo+1,k,n)) >= 2.*std::abs(sp - s(i,domlo+1,k,n))){
+                    sm = 3.*s(i,domlo+1,k,n) - 2.*sp; 
                 } 
             }
 
         }
 
       if(bchi == EXT_DIR || bchi == HOEXTRAP){
-          if(j == domhi - 1){ 
-                sedge = -0.2*s(i, j+2, k, n) + 0.75*s(i,j+2, k, n) 
-                       +  0.5*s(i,j,k,n) - 0.05*s(i,j-1,k,n); 
-                sedge = amrex::max(sedge, amrex::min(s(i,j+1,k,n), s(i,j,k,n))); 
-                sedge = amrex::min(sedge, amrex::max(s(i,j+1,k,n), s(i,j,k,n))); 
+          if(j == domhi) sp = s(i,domhi,k,n); 
+          else if(j == domhi - 1){ 
+                sedge = -0.2*s(i, domhi+1, k, n) + 0.75*s(i,domhi, k, n) 
+                       +  0.5*s(i,domhi-1,k,n) - 0.05*s(i,domhi-2,k,n); 
+                sedge = amrex::max(sedge, amrex::min(s(i,domhi,k,n), s(i,domhi-1,k,n))); 
+                sedge = amrex::min(sedge, amrex::max(s(i,domhi,k,n), s(i,domhi-1,k,n))); 
 
                 sp = sedge; 
                 sm = sedge; 
-                if( (sp - s(i,j,k,n))*(s(i,j,k,n) - sm) <= 0.){
-                    sp = s(i,j,k,n); 
-                    sm = s(i,j,k,n); 
+                if( (sp - s(i,domhi-1,k,n))*(s(i,domhi-1,k,n) - sm) <= 0.){
+                    sp = s(i,domhi-1,k,n); 
+                    sm = s(i,domhi-1,k,n); 
                 }
-                else if(std::abs(sp - s(i,j,k,n)) >= 2.*std::abs(sm - s(i,j,k,n))){
-                    sp = 3.*s(i,j,k,n) - 2.*sm; 
+                else if(std::abs(sp - s(i,domhi-1,k,n)) >= 2.*std::abs(sm - s(i,domhi-1,k,n))){
+                    sp = 3.*s(i,domhi-1,k,n) - 2.*sm; 
                 }
-                else if(std::abs(sm - s(i,j,k,n)) >= 2.*std::abs(sp - s(i,j,k,n))){
-                    sm = 3.*s(i,j,k,n) - 2.*sp; 
+                else if(std::abs(sm - s(i,domhi-1,k,n)) >= 2.*std::abs(sp - s(i,domhi-1,k,n))){
+                    sm = 3.*s(i,domhi-1,k,n) - 2.*sp; 
                 } 
     
            }
@@ -141,46 +144,48 @@ inline void PeleLM_ppm_zbc(const int i, const int j, const int k, const int n,
                            const int domlo, const int domhi)
 {
         if(bclo == EXT_DIR || bclo == HOEXTRAP){
-            if(k == domlo+1){
-                sedge = -0.2*s(i, j, k-2, n) + 0.75*s(i,j, k-2, n) 
-                       +  0.5*s(i,j,k,n) - 0.05*s(i,j,k+1,n); 
-                sedge = amrex::max(sedge, amrex::min(s(i,j,k,n), s(i,j,k+1,n))); 
-                sedge = amrex::min(sedge, amrex::max(s(i,j,k,n), s(i,j,k+1,n))); 
+            if(k == domlo) sm = s(i,j,domlo-1,n); 
+            else if(k == domlo+1){
+                sedge = -0.2*s(i, j, domlo-1, n) + 0.75*s(i,j, domlo, n) 
+                       +  0.5*s(i,j,domlo+1,n) - 0.05*s(i,j,domlo+2,n); 
+                sedge = amrex::max(sedge, amrex::min(s(i,j,domlo+1,n), s(i,j,domlo+2,n))); 
+                sedge = amrex::min(sedge, amrex::max(s(i,j,domlo+1,n), s(i,j,domlo+2,n))); 
 
                 sp = sedge; 
                 sm = sedge; 
-                if( (sp - s(i,j,k,n))*(s(i,j,k,n) - sm) <= 0.){
-                    sp = s(i,j,k,n); 
-                    sm = s(i,j,k,n); 
+                if( (sp - s(i,j,domlo+1,n))*(s(i,j,domlo+1,n) - sm) <= 0.){
+                    sp = s(i,j,domlo+1,n); 
+                    sm = s(i,j,domlo+1,n); 
                 }
-                else if(std::abs(sp - s(i,j,k,n)) >= 2.*std::abs(sm - s(i,j,k,n))){
-                    sp = 3.*s(i,j,k,n) - 2.*sm; 
+                else if(std::abs(sp - s(i,j,domlo+1,n)) >= 2.*std::abs(sm - s(i,j,domlo+1,n))){
+                    sp = 3.*s(i,j,domlo+1,n) - 2.*sm; 
                 }
-                else if(std::abs(sm - s(i,j,k,n)) >= 2.*std::abs(sp - s(i,j,k,n))){
-                    sm = 3.*s(i,j,k,n) - 2.*sp; 
+                else if(std::abs(sm - s(i,j,domlo+1,n)) >= 2.*std::abs(sp - s(i,j,domlo+1,n))){
+                    sm = 3.*s(i,j,domlo+1,n) - 2.*sp; 
                 } 
             }
 
         }
 
       if(bchi == EXT_DIR || bchi == HOEXTRAP){
-          if(k == domhi - 1){ 
-                sedge = -0.2*s(i, j, k+2, n) + 0.75*s(i,j, k+1, n) 
-                       +  0.5*s(i,j,k,n) - 0.05*s(i,j,k-1,n); 
-                sedge = amrex::max(sedge, amrex::min(s(i,j,k,n), s(i,j,k+1,n))); 
-                sedge = amrex::min(sedge, amrex::max(s(i,j,k,n), s(i,j,k+1,n))); 
+          if(k == domhi) sp = s(i,j,domhi, n); 
+          else if(k == domhi - 1){ 
+                sedge = -0.2*s(i, j, domhi+1, n) + 0.75*s(i,j, domhi, n) 
+                       +  0.5*s(i,j,domhi-1,n) - 0.05*s(i,j,domhi-2,n); 
+                sedge = amrex::max(sedge, amrex::min(s(i,j,domhi-1,n), s(i,j,domhi,n))); 
+                sedge = amrex::min(sedge, amrex::max(s(i,j,domhi-1,n), s(i,j,domhi,n))); 
 
                 sp = sedge; 
                 sm = sedge; 
-                if( (sp - s(i,j,k,n))*(s(i,j,k,n) - sm) <= 0.){
-                    sp = s(i,j,k,n); 
-                    sm = s(i,j,k,n); 
+                if( (sp - s(i,j,domhi-1,n))*(s(i,j,domhi-1,n) - sm) <= 0.){
+                    sp = s(i,j,domhi-1,n); 
+                    sm = s(i,j,domhi-1,n); 
                 }
-                else if(std::abs(sp - s(i,j,k,n)) >= 2.*std::abs(sm - s(i,j,k,n))){
-                    sp = 3.*s(i,j,k,n) - 2.*sm; 
+                else if(std::abs(sp - s(i,j,domhi-1,n)) >= 2.*std::abs(sm - s(i,j,domhi-1,n))){
+                    sp = 3.*s(i,j,domhi-1,n) - 2.*sm; 
                 }
-                else if(std::abs(sm - s(i,j,k,n)) >= 2.*std::abs(sp - s(i,j,k,n))){
-                    sm = 3.*s(i,j,k,n) - 2.*sp; 
+                else if(std::abs(sm - s(i,j,domhi-1,n)) >= 2.*std::abs(sp - s(i,j,domhi-1,n))){
+                    sm = 3.*s(i,j,domhi-1,n) - 2.*sp; 
                 } 
     
            }
@@ -199,8 +204,7 @@ inline void PeleLM_ppm(const int i, const int j, const int k, const int n,
                        const amrex::BCRec bc, const int domlo, const int domhi,                  
                        const int dir)
 {
-    amrex::Real sedge1, sedge2, d1, d2, s2, s3, sp, sm; 
-    amrex::Print()<< "n" << NCOMP<< std::endl;  
+    amrex::Real sedge1, sedge2, sp, sm; 
     amrex::Real s1 = S(i,j,k,n);     
 
     //X 
@@ -237,12 +241,13 @@ inline void PeleLM_ppm(const int i, const int j, const int k, const int n,
         
         PeleLM_ppm_xbc(i, j, k, n, sm, sp, sedge1, S, bc.lo(0), bc.hi(0), domlo, domhi); 
         amrex::Real s6 = 6.e0*s2- 3.e0*(sm + sp); 
-        amrex::Real sigmap = std::abs(vel_edge(i+1,j,k))*dx/dt; 
+        amrex::Real sigmap = std::abs(vel_edge(i+1,j,k))*dx/dt;
         amrex::Real sigmam = std::abs(vel_edge(i,j,k))*dx/dt;
 
-        if(vel_edge(i+1,j,k) > 1.e-10)
+        if(vel_edge(i+1,j,k) > 1.e-10){
             Ip(i,j,k,n) = sp - (0.5*sigmap)*((sp - sm) -
-                                             (1.e0 -2.e0/3.e0*sigmap)*s6); 
+                                             (1.e0 -2.e0/3.e0*sigmap)*s6);
+        }
         else
             Ip(i,j,k,n) = s2; 
 
@@ -359,21 +364,25 @@ inline void PeleLM_trans_xbc(const int i, const int j, const int k, const int n,
                              amrex::Real &lo, amrex::Real &hi, 
                              const amrex::Array4< const amrex::Real> &uedge, 
                              const int bclo, const int bchi, 
-                             const int domlox, const int domhix)
+                             const int domlo[], const int domhi[], 
+                             bool ycouple, bool zcouple)
 {
 // Lower X
-    if(i == domlox){ 
+    if(ycouple && (j<= domlo[1] || j >= domhi[1])) return; 
+    if(zcouple && (k<= domlo[2] || k>= domhi[2])) return;
+    const int domlox = domlo[0], domhix = domhi[0]; 
+    if(i <= domlox){ 
         if(bclo==EXT_DIR){
             if(n == XVEL){
-                if(uedge(i,j,k) >= 0.e0){
-                    lo = s(i-1, j, k, n); 
-                    hi = s(i-1, j, k, n); 
+                if(uedge(domlox,j,k) >= 0.e0){
+                    lo = s(domlox-1, j, k, n); 
+                    hi = s(domlox-1, j, k, n); 
                 }
                 else
-                    lo = s(i, j, k, n); 
+                    lo = s(domlox, j, k, n); 
             }
             else{
-                amrex::Real st = (uedge(i,j,k) <= 1e-10) ? hi : s(i-1,j,k,n); 
+                amrex::Real st = (uedge(i,j,k) <= 1e-10) ? hi : s(domlox-1,j,k,n); 
                 lo = st; 
                 hi = st; 
             }
@@ -389,17 +398,17 @@ inline void PeleLM_trans_xbc(const int i, const int j, const int k, const int n,
         }
     }
 //Upper X 
-    else if(i == domhix){
+    else if(i >= domhix){
         if(bchi==EXT_DIR){
             if(n == XVEL){
-                if(uedge(i,j,k) <=0.){
-                    lo = s(i,j,k,n); 
-                    hi = s(i,j,k,n);
+                if(uedge(domhix,j,k) <=0.){
+                    lo = s(domhix,j,k,n); 
+                    hi = s(domhix,j,k,n);
                 }
                 else hi = lo; 
             }
             else{
-                amrex::Real st = (uedge(i,j,k) >= -1e-10)? lo : s(i,j,k,n); 
+                amrex::Real st = (uedge(i,j,k) >= -1e-10)? lo : s(domhix,j,k,n); 
                 lo = st; 
                 hi = st; 
             }
@@ -423,18 +432,18 @@ inline void PeleLM_trans_ybc(const int i, const int j, const int k, const int n,
                              const int domloy, const int domhiy)
 {
 // Lower X 
-    if(j == domloy){ 
+    if(j <= domloy){ 
         if(bclo==EXT_DIR){
             if(n == YVEL){
-                if(vedge(i,j,k) >= 0.e0){
-                    lo = s(i, j-1, k, n); 
-                    hi = s(i, j-1, k, n); 
+                if(vedge(i,domloy,k) >= 0.e0){
+                    lo = s(i, domloy-1, k, n); 
+                    hi = s(i, domloy-1, k, n); 
                 }
                 else
-                    lo = s(i, j, k, n); 
+                    lo = s(i, domloy, k, n); 
             }
             else{
-                amrex::Real st = (vedge(i,j,k) <= 1e-10) ? hi : s(i,j-1,k,n); 
+                amrex::Real st = (vedge(i,domloy,k) <= 1e-10) ? hi : s(i,domloy-1,k,n); 
                 lo = st; 
                 hi = st; 
             }
@@ -450,17 +459,17 @@ inline void PeleLM_trans_ybc(const int i, const int j, const int k, const int n,
         }
     }
 //Upper Y
-    else if(j == domhiy){
+    else if(j >= domhiy){
         if(bchi==EXT_DIR){
             if(n == YVEL){
-                if(vedge(i,j,k) <=0.){
-                    lo = s(i,j,k,n); 
-                    hi = s(i,j,k,n);
+                if(vedge(i,domhiy,k) <=0.){
+                    lo = s(i,domhiy,k,n); 
+                    hi = s(i,domhiy,k,n);
                 }
                 else hi = lo; 
             }
             else{
-                amrex::Real st = (vedge(i,j,k) >= -1e-10)? lo : s(i,j,k,n); 
+                amrex::Real st = (vedge(i,domhiy,k) >= -1e-10)? lo : s(i,domhiy,k,n); 
                 lo = st; 
                 hi = st; 
             }
@@ -484,18 +493,18 @@ inline void PeleLM_trans_zbc(const int i, const int j, const int k, const int n,
                              const int domloz, const int domhiz)
 {
 // Lower Z
-    if(k == domloz){ 
+    if(k <= domloz){ 
         if(bclo==EXT_DIR){
             if(n == ZVEL){
                 if(wedge(i,j,k) >= 0.e0){
-                    lo = s(i-1, j, k, n); 
-                    hi = s(i-1, j, k, n); 
+                    lo = s(i, j, domloz-1, n); 
+                    hi = s(i, j, domloz-1, n); 
                 }
                 else
-                    lo = s(i, j, k, n); 
+                    lo = s(i, j, domloz, n); 
             }
             else{
-                amrex::Real st = (wedge(i,j,k) <= 1e-10) ? hi : s(i-1,j,k,n); 
+                amrex::Real st = (wedge(i,j,domloz) <= 1e-10) ? hi : s(i,j,domloz,n); 
                 lo = st; 
                 hi = st; 
             }
@@ -511,17 +520,17 @@ inline void PeleLM_trans_zbc(const int i, const int j, const int k, const int n,
         }
     }
 //Upper Z 
-    else if(k == domhiz){
+    else if(k >= domhiz){
         if(bchi==EXT_DIR){
             if(n == ZVEL){
-                if(wedge(i,j,k) <=0.){
-                    lo = s(i+1,j,k,n); 
-                    hi = s(i+1,j,k,n);
+                if(wedge(i,j,domhiz) <=0.){
+                    lo = s(i,j,domhiz+1,n); 
+                    hi = s(i,j,domhiz+1,n);
                 }
                 else hi = lo; 
             }
             else{
-                amrex::Real st = (wedge(i,j,k) >= -1e-10)? lo : s(i,j,k,n); 
+                amrex::Real st = (wedge(i,j,domhiz) >= -1e-10)? lo : s(i,j,k,domhiz); 
                 lo = st; 
                 hi = st; 
             }
@@ -538,158 +547,173 @@ inline void PeleLM_trans_zbc(const int i, const int j, const int k, const int n,
 
 AMREX_GPU_HOST_DEVICE
 inline void PeleLM_corner_couple(const int i, const int j, const int k, const int n, 
-                                 const amrex::Real dt, const amrex::Real dx1, 
-                                 const amrex::Real dx2, const int iconserv[], 
+                                 const amrex::Real dt, const amrex::Real dx, 
+                                 const int iconserv[], 
                                  const amrex::Array4<const amrex::Real> &lo, 
                                  const amrex::Array4<const amrex::Real> &hi,  
                                  const amrex::Array4<const amrex::Real> &s, 
                                  const amrex::Array4<const amrex::Real> &divu, 
-                                 const amrex::Array4<const amrex::Real> &mac1,         
-                                 const amrex::Array4<const amrex::Real> &mac2,
-                                 const amrex::Array4<const amrex::Real> &state1, 
-                                 const amrex::Array4<const amrex::Real> &state2, 
+                                 const amrex::Array4<const amrex::Real> &mac,         
+                                 const amrex::Array4<const amrex::Real> &state, 
                                  const amrex::Array4<amrex::Real> &lo1, 
                                  const amrex::Array4<amrex::Real> &hi1,
-                                 const amrex::Array4<amrex::Real> &lo2, 
-                                 const amrex::Array4<amrex::Real> &hi2,                  
-                                 const int dir)
+                                 const int dir1, const int dir2)
 {
 //=========================== X ====================================================
-    if(dir ==0){
+    if(dir1 ==0){
         if(iconserv[n]){
         //xylo xyhi 
+            if(dir2 == 0){
                 lo1(i,j,k,n)  = lo(i, j, k, n)
-                              - dt/(3.e0*dx1)*(state1(i-1,j+1,k,n)*mac1(i-1,j+1,k)
-                              - state1(i-1,j,k,n)*mac1(i-1,j,k))
+                              - dt/(3.e0*dx)*(state(i-1,j+1,k,n)*mac(i-1,j+1,k)
+                              - state(i-1,j,k,n)*mac(i-1,j,k))
                               - dt/3.e0*s(i-1,j,k,n)*divu(i-1,j,k)
-                              + dt/(3.e0*dx1)*s(i-1,j,k,n)*(mac1(i-1,j+1,k)-mac1(i-1,j,k));
+                              + dt/(3.e0*dx)*s(i-1,j,k,n)*(mac(i-1,j+1,k)-mac(i-1,j,k));
 
                 hi1(i,j,k,n)  = hi(i, j, k, n)
-                              - dt/(3.e0*dx1)*(state1(i,j+1,k,n)*mac1(i,j+1,k)
-                              - state1(i,j,k,n)*mac1(i,j,k))
+                              - dt/(3.e0*dx)*(state(i,j+1,k,n)*mac(i,j+1,k)
+                              - state(i,j,k,n)*mac(i,j,k))
                               - dt/3.e0*s(i,j,k,n)*divu(i,j,k)
-                              + dt/(3.e0*dx1)*s(i,j,k,n)*(mac1(i,j+1,k)-mac1(i,j,k));
-
+                              + dt/(3.e0*dx)*s(i,j,k,n)*(mac(i,j+1,k)-mac(i,j,k));
+            }
         //xzlo xzhi 
-                lo2(i,j,k,n)  = lo(i,j,k,n)
-                              - dt/(3.e0*dx2)*(state2(i-1,j,k+1,n)*mac2(i-1,j,k+1)
-                              - state2(i-1,j,k,n)*mac2(i-1,j,k))
+            if(dir2 == 1){
+                lo1(i,j,k,n)  = lo(i,j,k,n)
+                              - dt/(3.e0*dx)*(state(i-1,j,k+1,n)*mac(i-1,j,k+1)
+                              - state(i-1,j,k,n)*mac(i-1,j,k))
                               - dt/(3.e0)*s(i-1,j,k,n)*divu(i-1,j,k)
-                              + dt/(3.e0*dx2)*s(i-1,j,k,n)*(mac2(i-1,j,k+1) - mac2(i-1,j,k));
+                              + dt/(3.e0*dx)*s(i-1,j,k,n)*(mac(i-1,j,k+1) - mac(i-1,j,k));
 
-                hi2(i,j,k,n)  = hi(i,j,k,n)
-                              - dt/(3.e0*dx2)*(state2(i,j,k+1,n)*mac2(i,j,k+1)
-                              - state2(i,j,k,n)*mac2(i,j,k))
+                hi1(i,j,k,n)  = hi(i,j,k,n)
+                              - dt/(3.e0*dx)*(state(i,j,k+1,n)*mac(i,j,k+1)
+                              - state(i,j,k,n)*mac(i,j,k))
                               - dt/(3.e0)*s(i,j,k,n)*divu(i,j,k)
-                              + dt/(3.e0*dx2)*s(i,j,k,n)*(mac2(i,j,k+1) - mac2(i,j,k));
+                              + dt/(3.e0*dx)*s(i,j,k,n)*(mac(i,j,k+1) - mac(i,j,k));
+            }
             }
         else{
+            if(dir2 == 0){
                lo1(i,j,k,n)  = lo(i,j,k,n)
-                             - dt/(6.e0*dx1)*(mac1(i-1,j+1,k) + mac1(i-1,j,k))
-                             * (state1(i-1,j+1,k,n) - state1(i-1,j,k,n));
+                             - dt/(6.e0*dx)*(mac(i-1,j+1,k) + mac(i-1,j,k))
+                             * (state(i-1,j+1,k,n) - state(i-1,j,k,n));
                hi1(i,j,k,n)  = hi(i,j,k,n)
-                             - dt/(6.e0*dx1)*(mac1(i,j+1,k) + mac1(i,j,k))
-                             * (state1(i, j+1,k, n) - state1(i, j, k, n));
-
-               lo2(i,j,k,n)  = lo(i,j,k,n)
-                             - dt/(6.e0*dx2)*(mac2(i-1,j,k+1) + mac2(i-1,j,k))
-                             * (state2(i-1,j,k+1,n) - state2(i-1,j,k,n)); 
+                             - dt/(6.e0*dx)*(mac(i,j+1,k) + mac(i,j,k))
+                             * (state(i, j+1,k, n) - state(i, j, k, n));
+            }
+            if(dir2 == 1){
+               lo1(i,j,k,n)  = lo(i,j,k,n)
+                             - dt/(6.e0*dx)*(mac(i-1,j,k+1) + mac(i-1,j,k))
+                             * (state(i-1,j,k+1,n) - state(i-1,j,k,n)); 
                 
-               hi2(i,j,k,n)  = hi(i,j,k,n) 
-                             - dt/(6.e0*dx2)*(mac2(i,j,k+1) + mac2(i,j,k))
-                             * (state2(i,j,k+1,n) - state2(i,j,k,n)); 
+               hi1(i,j,k,n)  = hi(i,j,k,n) 
+                             - dt/(6.e0*dx)*(mac(i,j,k+1) + mac(i,j,k))
+                             * (state(i,j,k+1,n) - state(i,j,k,n)); 
+            }
         }
     }
 //=========================== Y ========================================================
-    if(dir==1){
+    if(dir1==1){
         if(iconserv[n]){
         //yxlo yxhi 
+             if(dir2 == 0){
+   
                 lo1(i,j,k,n)  = lo(i,j,k,n) 
-                              - dt/(3.e0*dx1)*(state1(i+1,j-1,k,n)*mac1(i+1,j-1,k)
-                              - state1(i,j-1,k,n)*mac1(i,j-1,k))
+                              - dt/(3.e0*dx)*(state(i+1,j-1,k,n)*mac(i+1,j-1,k)
+                              - state(i,j-1,k,n)*mac(i,j-1,k))
                               - dt/(3.e0)*s(i,j-1,k,n)*divu(i,j-1,k)
-                              + dt/(3.e0*dx1)*s(i,j-1,k,n)*(mac1(i+1,j-1,k)-mac1(i,j-1,k));
+                              + dt/(3.e0*dx)*s(i,j-1,k,n)*(mac(i+1,j-1,k)-mac(i,j-1,k));
 
                 hi1(i,j,k,n)  = hi(i,j,k,n) 
-                              - dt/(3.e0*dx1)*(state1(i+1,j,k,n)*mac1(i+1,j,k)
-                              - state1(i,j,k,n)*mac1(i,j,k))
+                              - dt/(3.e0*dx)*(state(i+1,j,k,n)*mac(i+1,j,k)
+                              - state(i,j,k,n)*mac(i,j,k))
                               - dt/(3.e0)*s(i,j,k,n)*divu(i,j,k) 
-                              + dt/(3.e0*dx1)*s(i,j,k,n)*(mac1(i+1,j,k) - mac1(i,j,k));
-
+                              + dt/(3.e0*dx)*s(i,j,k,n)*(mac(i+1,j,k) - mac(i,j,k));
+            }
         //yzlo yzhi         
-                lo2(i,j,k,n)  = lo(i,j,k,n) 
-                              - dt/(3.e0*dx2)*(state2(i,j-1,k+1,n)*mac2(i,j-1,k+1)
-                              - state2(i,j-1,k,n)*mac2(i,j-1,k))
+             if(dir2 == 1){
+               lo1(i,j,k,n)  = lo(i,j,k,n) 
+                              - dt/(3.e0*dx)*(state(i,j-1,k+1,n)*mac(i,j-1,k+1)
+                              - state(i,j-1,k,n)*mac(i,j-1,k))
                               - dt/(3.e0)*s(i,j-1,k,n)*divu(i,j-1,k)
-                              + dt/(3.e0*dx2)*s(i,j-1,k,n)*(mac2(i,j-1,k+1)-mac2(i,j-1,k));
+                              + dt/(3.e0*dx)*s(i,j-1,k,n)*(mac(i,j-1,k+1)-mac(i,j-1,k));
 
-                hi2(i,j,k,n)  = hi(i,j,k,n) 
-                              - dt/(3.e0*dx2)*(state2(i,j,k+1,n)*mac2(i,j,k+1)
-                              - state2(i,j,k,n)*mac2(i,j,k))
+                hi1(i,j,k,n)  = hi(i,j,k,n) 
+                              - dt/(3.e0*dx)*(state(i,j,k+1,n)*mac(i,j,k+1)
+                              - state(i,j,k,n)*mac(i,j,k))
                               - dt/(3.e0)*s(i,j,k,n)*divu(i,j,k) 
-                              + dt/(3.e0*dx2)*s(i,j,k,n)*(mac2(i,j,k+1) - mac2(i,j,k));
+                              + dt/(3.e0*dx)*s(i,j,k,n)*(mac(i,j,k+1) - mac(i,j,k));
+            }
         }
         else{
-               lo1(i,j,k,n)  = lo(i,j,k,n)
-                             - dt/(6.e0*dx1)*(mac1(i+1,j-1,k) + mac1(i,j-1,k))
-                             * (state1(i+1,j-1,k,n) - state1(i,j-1,k,n));
+             if(dir2 == 0){
+              lo1(i,j,k,n)  = lo(i,j,k,n)
+                             - dt/(6.e0*dx)*(mac(i+1,j-1,k) + mac(i,j-1,k))
+                             * (state(i+1,j-1,k,n) - state(i,j-1,k,n));
                hi1(i,j,k,n)  = hi(i,j,k,n)
-                             - dt/(6.e0*dx1)*(mac1(i+1,j,k) + mac1(i,j,k))
-                             * (state1(i+1, j,k, n) - state1(i, j, k, n));
-
-               lo2(i,j,k,n)  = lo(i,j,k,n)
-                             - dt/(6.e0*dx2)*(mac2(i,j-1,k+1) + mac2(i,j-1,k))
-                             * (state2(i,j-1,k+1,n) - state2(i,j-1,k,n)); 
+                             - dt/(6.e0*dx)*(mac(i+1,j,k) + mac(i,j,k))
+                             * (state(i+1, j,k, n) - state(i, j, k, n));
+            }
+             if(dir2 == 1){
+              lo1(i,j,k,n)  = lo(i,j,k,n)
+                             - dt/(6.e0*dx)*(mac(i,j-1,k+1) + mac(i,j-1,k))
+                             * (state(i,j-1,k+1,n) - state(i,j-1,k,n)); 
                 
-               hi2(i,j,k,n)  = hi(i,j,k,n) 
-                             - dt/(6.e0*dx2)*(mac2(i,j,k+1) + mac2(i,j,k))
-                             * (state2(i,j,k+1,n) - state2(i,j,k,n)); 
+               hi1(i,j,k,n)  = hi(i,j,k,n) 
+                             - dt/(6.e0*dx)*(mac(i,j,k+1) + mac(i,j,k))
+                             * (state(i,j,k+1,n) - state(i,j,k,n)); 
+            }
         }
     }
 //=========================== Z ======================================================    
-    if(dir==2){
+    if(dir1==2){
         if(iconserv[n]){
         //zxlo zxhi 
-                lo1(i,j,k,n)  = lo(i,j,k,n) 
-                              - dt/(3.e0*dx1)*(state1(i+1,j,k-1,n)*mac1(i+1,j,k-1)
-                              - state1(i,j,k-1,n)*mac1(i,j,k-1))
+             if(dir2 == 0){
+               lo1(i,j,k,n)  = lo(i,j,k,n) 
+                              - dt/(3.e0*dx)*(state(i+1,j,k-1,n)*mac(i+1,j,k-1)
+                              - state(i,j,k-1,n)*mac(i,j,k-1))
                               - dt/(3.e0)*s(i,j,k-1,n)*divu(i,j,k-1)
-                              + dt/(3.e0*dx1)*s(i,j,k-1,n)*(mac1(i+1,j,k-1)-mac1(i,j,k-1));
+                              + dt/(3.e0*dx)*s(i,j,k-1,n)*(mac(i+1,j,k-1)-mac(i,j,k-1));
 
                 hi1(i,j,k,n)  = hi(i,j,k,n) 
-                              - dt/(3.e0*dx1)*(state1(i+1,j,k,n)*mac1(i+1,j,k)
-                              - state1(i,j,k,n)*mac1(i,j,k))
+                              - dt/(3.e0*dx)*(state(i+1,j,k,n)*mac(i+1,j,k)
+                              - state(i,j,k,n)*mac(i,j,k))
                               - dt/(3.e0)*s(i,j,k,n)*divu(i,j,k) 
-                              + dt/(3.e0*dx1)*s(i,j,k,n)*(mac1(i+1,j,k) - mac1(i,j,k));
-
+                              + dt/(3.e0*dx)*s(i,j,k,n)*(mac(i+1,j,k) - mac(i,j,k));
+            }
         //zylo zyhi         
-                lo2(i,j,k,n)  = lo(i,j,k,n) 
-                              - dt/(3.e0*dx2)*(state2(i,j+1,k-1,n)*mac2(i,j+1,k-1)
-                              - state2(i,j,k-1,n)*mac2(i,j,k-1))
+             if(dir2 == 1){
+               lo1(i,j,k,n)  = lo(i,j,k,n) 
+                              - dt/(3.e0*dx)*(state(i,j+1,k-1,n)*mac(i,j+1,k-1)
+                              - state(i,j,k-1,n)*mac(i,j,k-1))
                               - dt/(3.e0)*s(i,j,k-1,n)*divu(i,j,k-1)
-                              + dt/(3.e0*dx2)*s(i,j,k-1,n)*(mac2(i,j+1,k-1)-mac2(i,j,k-1));
+                              + dt/(3.e0*dx)*s(i,j,k-1,n)*(mac(i,j+1,k-1)-mac(i,j,k-1));
 
-                hi2(i,j,k,n)  = hi(i,j,k,n) 
-                              - dt/(3.e0*dx2)*(state2(i,j+1,k,n)*mac2(i,j+1,k)
-                              - state2(i,j,k,n)*mac2(i,j,k))
+                hi1(i,j,k,n)  = hi(i,j,k,n) 
+                              - dt/(3.e0*dx)*(state(i,j+1,k,n)*mac(i,j+1,k)
+                              - state(i,j,k,n)*mac(i,j,k))
                               - dt/(3.e0)*s(i,j,k,n)*divu(i,j,k) 
-                              + dt/(3.e0*dx2)*s(i,j,k,n)*(mac2(i,j+1,k) - mac2(i,j,k));
+                              + dt/(3.e0*dx)*s(i,j,k,n)*(mac(i,j+1,k) - mac(i,j,k));
+            }
         }
         else{
-               lo1(i,j,k,n)  = lo(i,j,k,n)
-                             - dt/(6.e0*dx1)*(mac1(i+1,j,k-1) + mac1(i,j,k-1))
-                             * (state1(i+1,j,k-1,n) - state1(i,j,k-1,n));
+             if(dir2 == 0){
+              lo1(i,j,k,n)  = lo(i,j,k,n)
+                             - dt/(6.e0*dx)*(mac(i+1,j,k-1) + mac(i,j,k-1))
+                             * (state(i+1,j,k-1,n) - state(i,j,k-1,n));
                hi1(i,j,k,n)  = hi(i,j,k,n)
-                             - dt/(6.e0*dx1)*(mac1(i+1,j,k) + mac1(i,j,k))
-                             * (state1(i+1, j,k, n) - state1(i, j, k, n));
-
-               lo2(i,j,k,n)  = lo(i,j,k,n)
-                             - dt/(6.e0*dx2)*(mac2(i,j+1,k-1) + mac2(i,j,k-1))
-                             * (state2(i,j+1,k-1,n) - state2(i,j,k-1,n)); 
+                             - dt/(6.e0*dx)*(mac(i+1,j,k) + mac(i,j,k))
+                             * (state(i+1, j,k, n) - state(i, j, k, n));
+             }
+             if(dir2 == 1){
+              lo1(i,j,k,n)  = lo(i,j,k,n)
+                             - dt/(6.e0*dx)*(mac(i,j+1,k-1) + mac(i,j,k-1))
+                             * (state(i,j+1,k-1,n) - state(i,j,k-1,n)); 
                 
-               hi2(i,j,k,n)  = hi(i,j,k,n) 
-                             - dt/(6.e0*dx2)*(mac2(i,j+1,k) + mac2(i,j,k))
-                             * (state2(i,j+1,k,n) - state2(i,j,k,n)); 
+               hi1(i,j,k,n)  = hi(i,j,k,n) 
+                             - dt/(6.e0*dx)*(mac(i,j+1,k) + mac(i,j,k))
+                             * (state(i,j+1,k,n) - state(i,j,k,n)); 
+            }
         }
     }
 

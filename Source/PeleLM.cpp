@@ -5777,9 +5777,7 @@ PeleLM::compute_scalar_advection_fluxes_and_divergence (const MultiFab& Force,
     for(int n = 0; n < NCOMP; ++n){
         setBC(bx, geom.Domain(), (state[State_Type].descriptor())->getBC(first_spec + n), BCs[n]); 
     }
-    auto aofsarr = aofs->array(S_mfi); 
-// TODO change this from a IAMR CPU funct to PeleLM GPU op 
-    // Note that the FPU argument is no longer used in IAMR->Godunov.cpp because FPU is now default
+    auto aofsarr = aofs->array(S_mfi);
     PeleLM_AdvectScalars(bx, dx, dt,  D_DECL((area[0]).array(S_mfi), 
                                              (area[1]).array(S_mfi), 
                                              (area[2]).array(S_mfi)), 
@@ -5794,7 +5792,8 @@ PeleLM::compute_scalar_advection_fluxes_and_divergence (const MultiFab& Force,
                                               edgstate[2].array()),
                                       Smf.array(S_mfi), force, divu, 
                                       aofsarr, advectionType, BCs, volume.array(S_mfi));
- 
+
+// Note that the FPU argument is no longer used in IAMR->Godunov.cpp because FPU is now default
 /*    godunov->AdvectScalars(bx, dx, dt, 
                            D_DECL(  area[0][S_mfi],  area[1][S_mfi],  area[2][S_mfi]),
                            D_DECL( u_mac[0][S_mfi], u_mac[1][S_mfi], u_mac[2][S_mfi]),
