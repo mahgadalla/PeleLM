@@ -1,6 +1,7 @@
 #include "PeleLM_advection_3D.H"
 #include "PeleLM_advection.H" 
 #include "PeleLM.H"
+#include <iomanip> 
 
 using namespace amrex;
 
@@ -19,24 +20,24 @@ void PeleLM_AdvectScalars(const Box bx, const Real del[],
                           const Array4<const Real> &V)
 {
     int use_conserv_diff[NCOMP]; 
-    for( int i = 0; i < NCOMP; ++i) 
-        use_conserv_diff[i] = (advectionType[i] == 0) ? 1 : 0; 
-
+    for( int i = 0; i < NCOMP; ++i){ 
+       use_conserv_diff[i] = (advectionType[i+RHO] == 0) ? 1 : 0; 
+    }
     const int*  domain_lo = DefaultGeometry().Domain().loVect();
     const int*  domain_hi = DefaultGeometry().Domain().hiVect();
 
     PeleLM_estate_fpu(bx, s, forces, divu, umac, vmac, wmac, xstate, ystate, zstate, dt, 
-                     del, BCs, domain_lo, domain_hi, use_conserv_diff); 
+                     del, BCs, domain_lo, domain_hi, use_conserv_diff);    
 
 //ComputeAofs
     const Box fxbx = surroundingNodes(bx, 0); 
     const Box fybx = surroundingNodes(bx, 1); 
     const Box fzbx = surroundingNodes(bx, 2); 
 
-    AMREX_PARALLEL_FOR_4D(fxbx, NCOMP, i, j, k, n, { 
+   AMREX_PARALLEL_FOR_4D(fxbx, NCOMP, i, j, k, n, {
         xflx(i,j,k,n) = xstate(i,j,k,n)*umac(i,j,k)*Ax(i,j,k);
-    }); 
-    AMREX_PARALLEL_FOR_4D(fybx, NCOMP, i, j, k, n, { 
+    });
+    AMREX_PARALLEL_FOR_4D(fybx, NCOMP, i, j, k, n, {
         yflx(i,j,k,n) = ystate(i,j,k,n)*vmac(i,j,k)*Ay(i,j,k); 
     });
     AMREX_PARALLEL_FOR_4D(fzbx, NCOMP, i, j, k, n, { 
@@ -48,17 +49,16 @@ void PeleLM_AdvectScalars(const Box bx, const Real del[],
         amrex::Real fluxdiv = ((xflx(i+1,j,k,n) - xflx(i,j,k,n))
                             +  (yflx(i,j+1,k,n) - yflx(i,j,k,n))
                             +  (zflx(i,j,k+1,n) - zflx(i,j,k,n)))/V(i,j,k);  
-
-        if(use_conserv_diff[n]==0){
+        if(use_conserv_diff[n]!=1){
             amrex::Real divux = Ax(i+1,j,k)*umac(i+1,j,k) - 
                                 Ax(i  ,j,k)*umac(i  ,j,k); 
             amrex::Real divuy = Ay(i,j+1,k)*vmac(i,j+1,k) - 
                                 Ay(i,j  ,k)*vmac(i,j  ,k); 
             amrex::Real divuz = Az(i,j,k+1)*wmac(i,j,k+1) - 
                                 Az(i,j,k  )*wmac(i,j,k  ); 
-            aofs(i,j,k,n+RHO) = fluxdiv + (-divux*0.5*(xstate(i+1,j,k,n) - xstate(i,j,k,n))
-                                 -divuy*0.5*(ystate(i,j+1,k,n) - ystate(i,j,k,n))
-                                 -divuz*0.5*(zstate(i,j,k+1,n) - zstate(i,j,k,n)))/V(i,j,k);
+            aofs(i,j,k,n+RHO) = fluxdiv + (-divux*0.5*(xstate(i+1,j,k,n) + xstate(i,j,k,n))
+                                           -divuy*0.5*(ystate(i,j+1,k,n) + ystate(i,j,k,n))
+                                           -divuz*0.5*(zstate(i,j,k+1,n) + zstate(i,j,k,n)))/V(i,j,k);
             }
         else{
             aofs(i,j,k,n+RHO) = fluxdiv;
@@ -190,11 +190,11 @@ void PeleLM_estate_fpu(const amrex::Box bx,
         amrex::Real lo; 
         amrex::Real hi; 
         amrex::Real st;
-        amrex::Real fux = (std::abs(umac(i,j,k)) < 1e-10)? 0.e0 : 1.e0; 
+        amrex::Real fux = (std::abs(umac(i,j,k)) < 1e-06)? 0.e0 : 1.e0; 
         bool uval = umac(i,j,k) >= 0.e0; 
         auto bc = BCs[n];  
-        cons1 = (iconserv[n])? - 0.5e0*dt*s(i-1,j,k,n)*divu(i-1,j,k) : 0; 
-        cons2 = (iconserv[n])? - 0.5e0*dt*s(i,j,k,n)*divu(i,j,k) : 0; 
+        cons1 = (iconserv[n]==1)? - 0.5e0*dt*s(i-1,j,k,n)*divu(i-1,j,k) : 0; 
+        cons2 = (iconserv[n]==1)? - 0.5e0*dt*s(i,j,k,n)*divu(i,j,k) : 0; 
         lo    = Ipx(i-1,j,k,n) + 0.5e0*dt*tf(i-1,j,k,n) + cons1; 
         hi    = Imx(i,j,k,n) + 0.5e0*dt*tf(i, j, k, n) + cons2;
         PeleLM_trans_xbc(i, j, k, n, s, lo, hi, umac, bc.lo(0), bc.hi(0), 
@@ -216,12 +216,12 @@ void PeleLM_estate_fpu(const amrex::Box bx,
         amrex::Real lo; 
         amrex::Real hi; 
         amrex::Real st;
-        amrex::Real fuy = (std::abs(vmac(i,j,k)) < 1e-10)? 0.e0 : 1.e0; 
+        amrex::Real fuy = (std::abs(vmac(i,j,k)) < 1e-06)? 0.e0 : 1.e0; 
 
         bool vval = vmac(i,j,k) >= 0.e0; 
         auto bc = BCs[n];  
-        cons1 = (iconserv[n])? - 0.5e0*dt*s(i,j-1,k,n)*divu(i,j-1,k) : 0; 
-        cons2 = (iconserv[n])? - 0.5e0*dt*s(i,j,k,n)*divu(i,j,k) : 0; 
+        cons1 = (iconserv[n]==1)? - 0.5e0*dt*s(i,j-1,k,n)*divu(i,j-1,k) : 0; 
+        cons2 = (iconserv[n]==1)? - 0.5e0*dt*s(i,j,k,n)*divu(i,j,k) : 0; 
         lo    = Ipy(i,j-1,k,n) + 0.5e0*dt*tf(i,j-1,k,n) + cons1; 
         hi    = Imy(i,j,k,n)   + 0.5e0*dt*tf(i,j,k,n) + cons2; 
         PeleLM_trans_ybc(i, j, k, n, s, lo, hi, vmac, bc.lo(1), bc.hi(1),
@@ -243,19 +243,21 @@ void PeleLM_estate_fpu(const amrex::Box bx,
         amrex::Real lo; 
         amrex::Real hi; 
         amrex::Real st;
-        amrex::Real fuz = (std::abs(wmac(i,j,k)) < 1e-10)? 0.e0 : 1.e0; 
+        amrex::Real fuz = (std::abs(wmac(i,j,k)) < 1e-06)? 0.e0 : 1.e0; 
         bool wval = wmac(i,j,k) >= 0.e0; 
         auto bc = BCs[n];  
-        cons1 = (iconserv[n])? - 0.5e0*dt*s(i,j,k-1,n)*divu(i,j,k-1) : 0; 
-        cons2 = (iconserv[n])? - 0.5e0*dt*s(i,j,k,n)*divu(i,j,k) : 0; 
+        cons1 = (iconserv[n]==1)? - 0.5e0*dt*s(i,j,k-1,n)*divu(i,j,k-1) : 0; 
+        cons2 = (iconserv[n]==1)? - 0.5e0*dt*s(i,j,k,n)*divu(i,j,k) : 0; 
         lo    = Ipz(i,j,k-1,n) + 0.5e0*dt*tf(i,j,k-1,n) + cons1; 
         hi    = Imz(i,j,k,n)   + 0.5e0*dt*tf(i,j,k,n) + cons2; 
         PeleLM_trans_zbc(i, j, k, n, s, lo, hi, wmac, bc.lo(2), bc.hi(2),
-                                 bx.loVect(), bx.hiVect(), false, false);  
+                                 bx.loVect(), bx.hiVect(), false, false); 
+
         zlo(i,j,k,n) = lo; 
         zhi(i,j,k,n) = hi; 
         st    = (wval) ? lo : hi;
-        zedge(i, j, k, n) = fuz*st + (1.e0 - fuz)*0.5e0*(hi + lo); 
+        zedge(i, j, k, n) = fuz*st + (1.e0 - fuz)*0.5e0*(hi + lo);
+
     });     
 
 // Clear integral states from PPM 
@@ -333,7 +335,7 @@ void PeleLM_estate_fpu(const amrex::Box bx,
                              s, divu, umac, xedge, zxlo, zxhi, 2, 0);
         PeleLM_trans_zbc(i, j, k, n, s, zxlo(i,j,k,n), zxhi(i,j,k,n), wmac,
                                    bc.lo(2), bc.hi(2),
-                                   bx.hiVect(), bx.loVect(), true, false); 
+                                   bx.loVect(), bx.hiVect(), true, false); 
     });
 
    //Dir trans against Y
@@ -354,7 +356,8 @@ void PeleLM_estate_fpu(const amrex::Box bx,
                              s, divu, vmac, yedge, zylo, zyhi, 2, 1);
         PeleLM_trans_zbc(i, j, k, n, s, zylo(i,j,k,n), zyhi(i,j,k,n), wmac,
                                  bc.lo(2), bc.hi(2),
-                                 bx.hiVect(), bx.loVect(), false, true); 
+                                 bx.loVect(), bx.hiVect(), false, true);
+
     });
     //Dir trans against Z
     AMREX_PARALLEL_FOR_4D (xzbx, NCOMP, i, j, k, n, {
@@ -383,7 +386,7 @@ void PeleLM_estate_fpu(const amrex::Box bx,
    const auto zbx = surroundingNodes(bx, 2);
  
    AMREX_PARALLEL_FOR_4D (xybx, NCOMP,  i, j, k, n, { 
-        amrex::Real fu = (std::abs(umac(i,j,k)) < 1e-10)? 0.0 : 1.0; 
+        amrex::Real fu = (std::abs(umac(i,j,k)) < 1e-06)? 0.0 : 1.0; 
         amrex::Real st; 
         st = (umac(i,j,k) >= 0)? xylo(i,j,k,n) : xyhi(i,j,k,n); 
         xylo(i,j,k,n) = fu*st 
@@ -391,7 +394,7 @@ void PeleLM_estate_fpu(const amrex::Box bx,
     }); 
     
    AMREX_PARALLEL_FOR_4D (xybx, NCOMP,  i, j, k, n, { 
-        amrex::Real fu = (std::abs(umac(i,j,k)) < 1e-10)? 0.0 : 1.0; 
+        amrex::Real fu = (std::abs(umac(i,j,k)) < 1e-06)? 0.0 : 1.0; 
         amrex::Real st; 
         st = (umac(i,j,k) >= 0)? xzlo(i,j,k,n) : xzhi(i,j,k,n); 
         xzlo(i,j,k,n) = fu*st 
@@ -399,7 +402,7 @@ void PeleLM_estate_fpu(const amrex::Box bx,
     });
  
    AMREX_PARALLEL_FOR_4D (yxbx, NCOMP, i, j, k, n, { 
-        amrex::Real fu = (std::abs(vmac(i,j,k)) < 1e-10)? 0.0 : 1.0; 
+        amrex::Real fu = (std::abs(vmac(i,j,k)) < 1e-06)? 0.0 : 1.0; 
         amrex::Real st; 
         st = (vmac(i,j,k) >= 0)? yxlo(i,j,k,n) : yxhi(i,j,k,n); 
         yxlo(i,j,k,n) = fu*st 
@@ -407,15 +410,15 @@ void PeleLM_estate_fpu(const amrex::Box bx,
     }); 
 
    AMREX_PARALLEL_FOR_4D (yzbx, NCOMP, i, j, k, n, { 
-        amrex::Real fu = (std::abs(vmac(i,j,k)) < 1e-10)? 0.0 : 1.0; 
+        amrex::Real fu = (std::abs(vmac(i,j,k)) < 1e-06)? 0.0 : 1.0; 
         amrex::Real st; 
-        st = (umac(i,j,k) >= 0)? yzlo(i,j,k,n) : yzhi(i,j,k,n); 
+        st = (vmac(i,j,k) >= 0)? yzlo(i,j,k,n) : yzhi(i,j,k,n); 
         yzlo(i,j,k,n) = fu*st 
                       + (1. - fu)*0.5*(yzhi(i,j,k,n) + yzlo(i,j,k,n)); 
     });
  
    AMREX_PARALLEL_FOR_4D (zxbx, NCOMP, i, j, k, n,{ 
-        amrex::Real fu = (std::abs(wmac(i,j,k)) < 1e-10)? 0.0 : 1.0;  
+        amrex::Real fu = (std::abs(wmac(i,j,k)) < 1e-06)? 0.0 : 1.0;  
         amrex::Real st; 
         st = (wmac(i,j,k) >= 0)? zxlo(i,j,k,n) : zxhi(i,j,k,n); 
         zxlo(i,j,k,n) = fu*st 
@@ -423,11 +426,12 @@ void PeleLM_estate_fpu(const amrex::Box bx,
     }); 
 
    AMREX_PARALLEL_FOR_4D (zybx, NCOMP, i, j, k, n,{ 
-        amrex::Real fu = (std::abs(wmac(i,j,k)) < 1e-10)? 0.0 : 1.0;  
+        amrex::Real fu = (std::abs(wmac(i,j,k)) < 1e-06)? 0.0 : 1.0;  
         amrex::Real st; 
         st = (wmac(i,j,k) >= 0)? zylo(i,j,k,n) : zyhi(i,j,k,n); 
         zylo(i,j,k,n) = fu*st 
-                      + (1. - fu)*0.5*(zyhi(i,j,k,n) + zylo(i,j,k,n)); 
+                      + (1. - fu)*0.5*(zyhi(i,j,k,n) + zylo(i,j,k,n));
+
     }); 
 
     /* Final Update of Faces */ 
@@ -438,7 +442,7 @@ void PeleLM_estate_fpu(const amrex::Box bx,
         amrex::Real temp; 
         auto bc = BCs[n]; 
 //--------------------------------------- X -------------------------------------- 
-        if(iconserv[n]){
+        if(iconserv[n]==1){
         stl = xlo(i,j,k,n) - (0.5*dt/dy)*(yzlo(i-1,j+1,k,n)*vmac(i-1,j+1,k)
                            - yzlo(i-1,j,k,n)*vmac(i-1,j,k))
                            - (0.5*dt/dz)*(zylo(i-1,j,k+1,n)*wmac(i-1,j,k+1)
@@ -464,10 +468,18 @@ void PeleLM_estate_fpu(const amrex::Box bx,
                            - (0.25*dt/dz)*(wmac(i,j,k+1)+wmac(i,j,k))*
                              (zylo(i,j,k+1,n) - zylo(i,j,k,n));
         }
-        PeleLM_trans_xbc(i, j, k, n, s, stl, sth, umac, bc.lo(0), bc.hi(0),
-                                 bx.loVect(), bx.hiVect(), true, true);  
+        amrex::Real stlold = stl; 
+        amrex::Real sthold = sth; 
+       
+        PeleLM_cc_xbc(i, j, k, n, s, stl, sth, umac, bc.lo(0), bc.hi(0),
+                                 bx.loVect()[0], bx.hiVect()[0]);  
+        if(stl>1e10 || sth > 1e10){
+            std::cout << "old = " << stlold << '\t' << sthold << std::endl; 
+            std::cout << "New" << std::endl; 
+            std::cout<< stl << '\t' << sth << '\t' << i << '\t' << j << '\t' << k << "  X" << std::endl;
+            std::cin.get();          }
         temp = (umac(i,j,k) >= 0.e0) ? stl : sth; 
-        temp = (std::abs(umac(i,j,k)) < 1e-10) ? 0.5*(stl + sth) : temp; 
+        temp = (std::abs(umac(i,j,k)) < 1e-06) ? 0.5*(stl + sth) : temp;
         xstate(i,j,k,n) = temp;
      }); 
 
@@ -477,7 +489,7 @@ void PeleLM_estate_fpu(const amrex::Box bx,
         amrex::Real temp; 
         auto bc = BCs[n]; 
 //-------------------------------------- Y ------------------------------------            
-        if(iconserv[n]){
+        if(iconserv[n]==1){
         stl = ylo(i,j,k,n) - (0.5*dt/dx)*(xzlo(i+1,j-1,k,n)*umac(i+1,j-1,k)
                            - xzlo(i,j-1,k,n)*umac(i,j-1,k))
                            - (0.5*dt/dz)*(zxlo(i,j-1,k+1,n)*wmac(i,j-1,k+1)
@@ -503,11 +515,15 @@ void PeleLM_estate_fpu(const amrex::Box bx,
                            - (0.25*dt/dz)*(wmac(i,j,k+1)+wmac(i,j,k))*
                              (zxlo(i,j,k+1,n) - zxlo(i,j,k,n));
         }
-        PeleLM_trans_ybc(i, j, k, n, s, stl, sth, vmac, bc.lo(1), bc.hi(1), 
-                                  bx.loVect(), bx.hiVect(), true, true); 
+        PeleLM_cc_ybc(i, j, k, n, s, stl, sth, vmac, bc.lo(1), bc.hi(1), 
+                                  bx.loVect()[1], bx.hiVect()[1]); 
+        if(stl>1e10 || sth > 1e10){
+            std::cout<< stl << '\t' << sth << '\t' << i << '\t' << j << '\t' << k << "  Y" << std::endl;
+            std::cin.get();  
+        }
 
         temp = (vmac(i,j,k) >= 0.e0) ? stl : sth; 
-        temp = (std::abs(vmac(i,j,k)) < 1e-10) ? 0.5*(stl + sth) : temp; 
+        temp = (std::abs(vmac(i,j,k)) < 1e-06) ? 0.5*(stl + sth) : temp; 
         ystate(i,j,k,n) = temp;
       });
 
@@ -517,7 +533,7 @@ void PeleLM_estate_fpu(const amrex::Box bx,
         amrex::Real temp; 
         auto bc = BCs[n]; 
 //----------------------------------- Z ----------------------------------------- 
-        if(iconserv[n]){
+        if(iconserv[n]==1){
         stl = zlo(i,j,k,n) - (0.5*dt/dx)*(xylo(i+1,j,k-1,n)*umac(i+1,j,k-1)
                            - xylo(i,j,k-1,n)*umac(i,j,k-1))
                            - (0.5*dt/dy)*(yxlo(i,j+1,k-1,n)*vmac(i,j+1,k-1)
@@ -543,10 +559,19 @@ void PeleLM_estate_fpu(const amrex::Box bx,
                            - (0.25*dt/dy)*(vmac(i,j+1,k)+vmac(i,j,k))*
                              (yxlo(i,j+1,k,n) - yxlo(i,j,k,n));
         }
-        PeleLM_trans_zbc(i, j, k, n, s, stl, sth, wmac, bc.lo(2), bc.hi(2), 
-                                        bx.loVect(), bx.hiVect(), true, true);  
+        amrex::Real stlold = stl; 
+        amrex::Real sthold = sth; 
+        PeleLM_cc_zbc(i, j, k, n, s, stl, sth, wmac, bc.lo(2), bc.hi(2), 
+                                        bx.loVect()[2], bx.hiVect()[2]);  
+        if(stl>1e10 || sth > 1e10){
+            std::cout << "old = " << stlold << '\t' << sthold << std::endl; 
+            std::cout << "New" << std::endl; 
+            std::cout<< stl << '\t' << sth << '\t' << i << '\t' << j << '\t' << k << "  Z" << std::endl;
+            std::cin.get();  
+        }
+
         temp = (wmac(i,j,k) >= 0.e0) ? stl : sth; 
-        temp = (std::abs(wmac(i,j,k)) < 1e-10) ? 0.5*(stl + sth) : temp; 
+        temp = (std::abs(wmac(i,j,k)) < 1e-06) ? 0.5*(stl + sth) : temp; 
         zstate(i,j,k,n) = temp;
     }); 
 }

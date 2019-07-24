@@ -42,6 +42,8 @@
 
 #include <AMReX_buildInfo.H>
 #include "PeleLM_advection.H" 
+#include <iomanip>
+
 
 using namespace amrex;
 
@@ -5740,10 +5742,10 @@ PeleLM::compute_scalar_advection_fluxes_and_divergence (const MultiFab& Force,
   for (MFIter S_mfi(Smf,TilingIfNotGPU()); S_mfi.isValid(); ++S_mfi)
   {
     const Box& bx = S_mfi.tilebox();
-//    const FArrayBox& divu = DivU[S_mfi];
-//    const FArrayBox& force = Force[S_mfi];
-    const auto divu = DivU.array(S_mfi); 
-    const auto force = Force.array(S_mfi); 
+    const FArrayBox& divu = DivU[S_mfi];
+    const FArrayBox& force = Force[S_mfi]; // */
+/*    const auto divu = DivU.array(S_mfi); 
+    const auto force = Force.array(S_mfi); // */ 
     
     
 
@@ -5754,13 +5756,19 @@ PeleLM::compute_scalar_advection_fluxes_and_divergence (const MultiFab& Force,
       edgstate[d].resize(ebx,nspecies+1);
     }
     Elixir edg1 = edgstate[0].elixir();
-    Elixir cfxe = cflux[0].elixir();  
+    Elixir cfxe = cflux[0].elixir(); 
+    auto xedge = edgstate[0].array(); 
+    auto xflx  = cflux[0].array();  
 #if AMREX_SPACEDIM >= 2
     Elixir edg2 = edgstate[1].elixir(); 
     Elixir cfye = cflux[1].elixir(); 
+    auto yedge = edgstate[1].array(); 
+    auto yflx  = cflux[1].array();  
 #if AMREX_SPACEDIM ==3
     Elixir edg3 = edgstate[2].elixir(); 
     Elixir cfze = cflux[2].elixir(); 
+    auto zedge = edgstate[2].array(); 
+    auto zflx  = cflux[2].array();  
 #endif
 #endif
  
@@ -5778,30 +5786,38 @@ PeleLM::compute_scalar_advection_fluxes_and_divergence (const MultiFab& Force,
         setBC(bx, geom.Domain(), (state[State_Type].descriptor())->getBC(first_spec + n), BCs[n]); 
     }
     auto aofsarr = aofs->array(S_mfi);
-    PeleLM_AdvectScalars(bx, dx, dt,  D_DECL((area[0]).array(S_mfi), 
+//    FArrayBox aost(bx, NCOMP+RHO); 
+//    auto aosarr = aost.array(); 
+/*    PeleLM_AdvectScalars(bx, dx, dt,  D_DECL((area[0]).array(S_mfi), 
                                              (area[1]).array(S_mfi), 
                                              (area[2]).array(S_mfi)), 
                                       D_DECL((u_mac[0]).array(S_mfi), 
                                              (u_mac[1]).array(S_mfi),
                                              (u_mac[2]).array(S_mfi)),
-                                      D_DECL((cflux[0]).array(),
-                                             (cflux[1]).array(), 
-                                             (cflux[2]).array()), 
-                                      D_DECL( edgstate[0].array(), 
-                                              edgstate[1].array(), 
-                                              edgstate[2].array()),
-                                      Smf.array(S_mfi), force, divu, 
-                                      aofsarr, advectionType, BCs, volume.array(S_mfi));
+                                      D_DECL(xflx, yflx, zflx), 
+                                      D_DECL(xedge, yedge, zedge),
+                                      Smf.array(S_mfi), force.array(), divu.array(), 
+                                      aofsarr, advectionType, BCs, volume.array(S_mfi)); // */ 
 
 // Note that the FPU argument is no longer used in IAMR->Godunov.cpp because FPU is now default
-/*    godunov->AdvectScalars(bx, dx, dt, 
+    godunov->AdvectScalars(bx, dx, dt, 
                            D_DECL(  area[0][S_mfi],  area[1][S_mfi],  area[2][S_mfi]),
                            D_DECL( u_mac[0][S_mfi], u_mac[1][S_mfi], u_mac[2][S_mfi]),
                            D_DECL(cflux[0],cflux[1],cflux[2]),
                            D_DECL(edgstate[0],edgstate[1],edgstate[2]),
                            Smf[S_mfi], 0, nspecies+1 , force, 0, divu, 0,
-                           (*aofs)[S_mfi], first_spec, advectionType, state_bc, FPU, volume[S_mfi]); */
-       
+                           (*aofs)[S_mfi], first_spec, advectionType, state_bc, FPU, volume[S_mfi]);
+    
+/*    AMREX_PARALLEL_FOR_4D(bx, NCOMP, i, j, k, n,{
+        amrex::Real temp = std::abs(aofsarr(i,j,k,n+first_spec) - aosarr(i,j,k,n+first_spec));  
+        if( temp > 1e-14){
+            std::cout<<std::setprecision(17)<<std::endl; 
+            std::cout<<i <<'\t'<<j<<'\t'<<k<<'\t'<<n<<'\t'<<temp << std::endl;
+            std::cout<<"CPP = "<< aosarr(i,j,k,n+first_spec) << '\t' << "FTN =" << aofsarr(i,j,k,n+first_spec) << std::endl;  
+            std::cin.get();   
+        }
+     });
+// */        
     // Accumulate rho flux divergence, rho on edges, and rho flux on edges
 // TODO these are all CPU fab functions.     
      for (int d=0; d<BL_SPACEDIM; ++d)
