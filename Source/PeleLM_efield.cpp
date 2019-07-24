@@ -98,7 +98,15 @@ void PeleLM::ef_define_data() {
 void PeleLM::ef_solve_phiv(const Real &time) {
 
 	MultiFab& S = get_new_data(State_Type);
-	MultiFab rhs_poisson(grids,dmap,1,nGrowAdvForcing);
+	MultiFab rhs_poisson(grids,dmap,1,1);
+
+// Get the coarse level data
+   std::unique_ptr<MultiFab> Scrse;
+	if (level > 0) {
+		auto& crselev = getLevel(level-1);
+		Scrse.reset(new MultiFab(crselev.boxArray(), crselev.DistributionMap(), 1, 1));
+		FillPatch(crselev,*Scrse,1,time,State_Type,PhiV,1,0);
+	}
 
 // Use FillPatchIterator (FPI) to update the data in the growth cell and copy back into S
 	FillPatchIterator PhiVfpi(*this,S,1,time,State_Type,PhiV,1);
@@ -143,6 +151,9 @@ void PeleLM::ef_solve_phiv(const Real &time) {
    std::array<LinOpBCType,AMREX_SPACEDIM> mlmg_hibc;
 	ef_set_PoissonBC(mlmg_lobc, mlmg_hibc);
    phiV_poisson.setDomainBC(mlmg_lobc, mlmg_hibc);
+	if (level > 0) {
+		phiV_poisson.setCoarseFineBC(Scrse.get(), crse_ratio[0]);
+	}
    phiV_poisson.setLevelBC(0, &PhiV_alias);
 
 // LinearSolver options
@@ -153,7 +164,6 @@ void PeleLM::ef_solve_phiv(const Real &time) {
 //	mlmg.setBottomVerbose(bottom_verbose);
 
 // Actual solve
-	PhiV_alias.setVal(0.0);
 	mlmg.solve({&PhiV_alias}, {&rhs_poisson}, S_tol, S_tol_abs);
 
 }
@@ -419,7 +429,7 @@ void PeleLM::ef_NL_residual(const Real      &dt,
 											 bool		  update_PC	) {
 
    MultiFab& I_R = get_new_data(RhoYdot_Type);
-	MultiFab I_R_e(I_R,amrex::make_alias,20,1); // TODO : define iE_sp in C++
+	MultiFab I_R_e(I_R,amrex::make_alias,nspecies,1); 
 
 // Copy const pnp_U_in into local to unscale pnp_U  
 	MultiFab pnp_U(grids,dmap,2,Godunov::hypgrow());
