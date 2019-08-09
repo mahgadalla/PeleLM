@@ -70,7 +70,8 @@
 							const amrex::Real      &time, 
 						   const amrex::MultiFab  &Dn,
 						   const amrex::MultiFab  &Dnp1,
-						   const amrex::MultiFab  &Dhat);
+						   const amrex::MultiFab  &Dhat,
+						   		amrex::MultiFab  &ForcingnE);
 
 // PNP NL residual function
 	void ef_NL_residual(const amrex::Real        &dt,
