@@ -957,6 +957,7 @@ contains
                        xlo, time, bc ) bind(C, name="ne_fill")
 
       use mod_Fvar_def, only : dim, maxspec, domnlo
+      use user_defined_fcts_2d_module, only : bcfunction_efield
 
       implicit none
 
@@ -967,7 +968,7 @@ contains
 
       integer i, j
       REAL_T  y, x
-      REAL_T  u, v, rho, Yl(0:maxspec-1), T, h, ne_bc, phiv_bc
+      REAL_T  :: u, v, rho, Yl(0:maxspec-1), T, h, ne_bc, phiV_bc
 
       integer lo(dim), hi(dim)
 
@@ -978,6 +979,7 @@ contains
 
       call filcc (ne_ar,DIMS(ne_ar),domlo,domhi,delta,xlo,bc)
 
+!     x low      
       if (bc(1,1).eq.EXT_DIR.and.lo(1).lt.domlo(1)) then
          do i = lo(1), domlo(1)-1
             x = (float(i)+.5)*delta(1)+domnlo(1)
