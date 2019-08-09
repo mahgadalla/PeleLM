@@ -87,6 +87,7 @@ void PeleLM::ef_define_data() {
    for (int d = 0; d < AMREX_SPACEDIM; ++d) {
 		const BoxArray& edgeba = getEdgeBoxArray(d);
 	   pnp_Ueff[d].define(edgeba,dmap, 1,1);
+		pnp_Ueff[d].setVal(1.e40);
 	}
 
 	pnp_SFne = 1.0;
@@ -164,6 +165,7 @@ void PeleLM::ef_solve_phiv(const Real &time) {
 //	mlmg.setBottomVerbose(bottom_verbose);
 
 // Actual solve
+   PhiV_alias.mult(0.9); 
 	mlmg.solve({&PhiV_alias}, {&rhs_poisson}, S_tol, S_tol_abs);
 
 }
@@ -181,10 +183,10 @@ void PeleLM::ef_init() {
 	PeleLM::ef_PoissonVerbose			 = 1;
 	PeleLM::ef_PoissonMaxOrder			 = 4;
 	PeleLM::ef_max_NK_ite             = 20;
-	PeleLM::ef_lambda_jfnk				 = 1.0e-7;
+	PeleLM::ef_lambda_jfnk				 = 1.0e-6;
 	PeleLM::ef_max_GMRES_rst			 = 50;
 	PeleLM::ef_GMRES_reltol  			 = 1.0e-10;
-	PeleLM::ef_GMRES_size			    = 10;
+	PeleLM::ef_GMRES_size			    = 20;
 	
 	ParmParse pp("ef");
 	
@@ -205,7 +207,8 @@ void PeleLM::ef_solve_PNP(const Real     &dt,
 							     const Real     &time, 
 							     const MultiFab &Dn,
 							     const MultiFab &Dnp1,
-							     const MultiFab &Dhat) {
+							     const MultiFab &Dhat,
+										  MultiFab &ForcingnE) {
 
 	BL_PROFILE("EF::ef_solve_PNP()");
 	
@@ -222,12 +225,17 @@ void PeleLM::ef_solve_PNP(const Real     &dt,
 	// Define and get PNP components
 	MultiFab&  S = get_new_data(State_Type);
 	MultiFab&  S_old = get_old_data(State_Type);
-	MultiFab::Copy(ne_old,S_old,nE,0,1,1);
-	MultiFab::Copy(phiV_old,S_old,PhiV,0,1,1);
+
+	{
+		FillPatchIterator nEfpi(*this,S_old,1,time,State_Type,nE,2);
+		MultiFab& nEfpi_mf = nEfpi.get_mf();
+		MultiFab::Copy(ne_old,nEfpi_mf,0,0,1,1);
+		MultiFab::Copy(phiV_old,nEfpi_mf,1,0,1,1);
+	}
 	
 	//	Define a FPI to get the (max) GC used throughout the PNP resolution
 	//	I'll need at most 4 GC for the Godunov stuff
-	FillPatchIterator nEfpi(*this,S,Godunov::hypgrow(),time,State_Type,nE,2);
+	FillPatchIterator nEfpi(*this,S_old,Godunov::hypgrow(),time,State_Type,nE,2);
 	MultiFab& nEfpi_mf = nEfpi.get_mf();
 	MultiFab::Copy(pnp_refGC, nEfpi_mf, 0, 0, 2, Godunov::hypgrow());
 	
@@ -237,23 +245,29 @@ void PeleLM::ef_solve_PNP(const Real     &dt,
 	MultiFab::Copy(pnp_U, pnp_refGC, 0, 0, 2, Godunov::hypgrow());
 	
 	// Get the NL vector scaling and scale
-	pnp_SUne = pnp_U.norm0(0);
-	pnp_SUphiV = pnp_U.norm0(1);
+	pnp_SUne = (pnp_U.norm0(0) > 0.0) ? pnp_U.norm0(0) : 1.0;
+	pnp_SUphiV = (pnp_U.norm0(1) > 0.0) ? pnp_U.norm0(1) : 1.0;
 	pnp_U.mult(1.0/pnp_SUne,0,1);	
    pnp_U.mult(1.0/pnp_SUphiV,1,1);	
 	amrex::Print() << " ne scaling: " << pnp_SUne << "\n";
 	amrex::Print() << " PhiV scaling: " << pnp_SUphiV << "\n";
 	showMF("pnp",pnp_U,"pnp_U0",level);
-	showMFsub("pnp1D",pnp_U,stripBox,"1Dpnp_U0",level);
+//	showMFsub("pnp1D",pnp_U,stripBox,"1Dpnp_U0",level);
+
+	if ( pnp_SUne <= 0.0 ) {
+		ForcingnE.setVal(0.0);	
+		return;
+	}
 
 	//	Vector<Real> norm_NL_U0(2);
 	const Real norm_NL_U0 = ef_NL_norm(pnp_U); 
 
 	// Compute provisional CD
+//	showMF("pnp",S_old,"pnp_Sold",level);
    ef_bg_chrg(dt, Dn, Dnp1, Dhat);
 
 	// Need the gradient of phiV_old
-   FluxBoxes fluxb(this, 1, 1);
+   FluxBoxes fluxb(this, 1, 0);
    grad_phiV_old = fluxb.get();
 	ef_calc_grad(dt, phiV_old, grad_phiV_old);
 
@@ -262,11 +276,17 @@ void PeleLM::ef_solve_PNP(const Real     &dt,
 	// second true trigger initalize the preconditioner.
    ef_NL_residual( dt, pnp_U, pnp_res, true, true );
 	showMF("pnp",pnp_res,"pnp_res0",level);
-	showMF("pnp",pnp_bgchrg,"pnp_bgchrg",level);
+//	showMF("pnp",pnp_bgchrg,"pnp_bgchrg",level);
 //	showMFsub("pnp1D",pnp_res,stripBox,"1Dpnp_res0",level);
 	pnp_res.mult(-1.0,0,2);
    const Real norm_NL_res0 = ef_NL_norm(pnp_res);	
+
 	// TODO: Check for direct convergence
+	if ( norm_NL_res0 <= pow(1.0e-16,2.0/3.0) ) {
+		ForcingnE.setVal(0.0);	
+		return;
+	}
+
 	// TODO: Get data for globalization algo: in 1D I call Jac ... not great ...
 
 	Real norm_NL_res = norm_NL_res0;
@@ -279,7 +299,8 @@ void PeleLM::ef_solve_PNP(const Real     &dt,
 	   NK_ite += 1;
 	   amrex::Print() << " Newton it: " << NK_ite << " residual: " << 0.5*norm_NL_res*norm_NL_res << "\n";
 
-		//    GMRES 
+		//    GMRES : PAx = Pb
+		//                                    b        x 
       ef_GMRES_solve( dt, norm_NL_U, pnp_U, pnp_res, pnp_dU ); 	
 
 		//    Linesearch
@@ -288,16 +309,32 @@ void PeleLM::ef_solve_PNP(const Real     &dt,
 		//    Test exit conditions  	
 	   test_exit_newton(pnp_res, NK_ite, norm_NL_res0, norm_NL_res, exit_newton);
 
-//		amrex::Abort("In Newton stop");
+		showMF("pnp",pnp_res,"pnp_resNewt",level,NK_ite);
+		showMF("pnp",pnp_U,"pnp_UNewt",level,NK_ite);
+		showMF("pnp",pnp_dU,"pnp_dUNewt",level,NK_ite);
+
+//		if ( NK_ite == 4 ) amrex::Abort("In Newton stop");
    } while( ! exit_newton );
 
 	// Post newton stuff
-	showMFsub("pnp1D",pnp_U,stripBox,"1DpostNewt_U",level);
-	showMF("pnp",pnp_U,"postNewt_U",level);
 	//TODO: 0 or 1 GC after pnp ?
-	MultiFab::Copy(S,pnp_U,0,nE,2,1);
+	MultiFab::Copy(ForcingnE,S_old,nE,0,1,0);
+	ForcingnE.mult(-1,0,1);	
+	pnp_U.mult(pnp_SUne,0,1);	
+   pnp_U.mult(pnp_SUphiV,1,1);	
+//	showMFsub("pnp1D",pnp_U,stripBox,"1DpostNewt_U",level);
+	showMF("pnp",pnp_U,"postNewt_U",level);
+	MultiFab::Copy(S,pnp_U,0,nE,2,0);
 
-	amrex::Abort("Post Newton stop");
+   MultiFab& I_R = get_new_data(RhoYdot_Type);
+	MultiFab I_R_e(I_R,amrex::make_alias,nspecies,1); 
+
+	ForcingnE.plus(pnp_U,0,1,0);
+	ForcingnE.mult(1.0/dt,0,1);
+	ForcingnE.minus(I_R_e,0,1,0);
+	showMF("pnp",ForcingnE,"postNewt_ForcingnE",level);
+
+//	amrex::Abort("Post Newton stop");
 }
 
 Real PeleLM::ef_NL_norm(const MultiFab &pnp_vec) {
@@ -321,8 +358,6 @@ void PeleLM::ef_linesearch(const Real		&dt,
 		int  max_ls_its = 10;
 
 		MultiFab pnp_Utmp(grids,dmap,2,Godunov::hypgrow());
-		MultiFab pnp_restmp(grids,dmap,2,0);
-		pnp_restmp.setVal(0.0);
 		pnp_Utmp.setVal(0.0);
 
 		// Backtracking algo from Dennis & Schnabel
@@ -354,7 +389,6 @@ void PeleLM::ef_linesearch(const Real		&dt,
 			ef_NL_residual( dt, pnp_Utmp, pnp_res, false, true );
 	   	pnp_res.mult(-1.0,0,2);
 		   //showMFsub("pnp1D",pnp_res,stripBox,"1Dpnp_resLS",level);
-		   //showMFsub("pnp1D",pnp_restmp,stripBox,"1Dpnp_restmpLS",level);
 			norm_LS_res = ef_NL_norm(pnp_res);
 			obj_new = 0.5*norm_LS_res*norm_LS_res;
 			sufficient_reduction = obj_old + lambda*alpha*initslope;
@@ -393,8 +427,7 @@ void PeleLM::ef_linesearch(const Real		&dt,
 		//amrex::Abort("Abort in linesearch");
 
 		// Update final solution/residual
-		MultiFab::Copy(pnp_U,pnp_Utmp, 0, 0, 2, Godunov::hypgrow()); 
-		//MultiFab::Copy(pnp_res,pnp_restmp, 0, 0, 2, 0); 
+		MultiFab::Copy(pnp_U,pnp_Utmp, 0, 0, 2, 0); 
 		norm_res = ef_NL_norm(pnp_res);;
 		norm_U = ef_NL_norm(pnp_U);
 
@@ -440,7 +473,7 @@ void PeleLM::ef_NL_residual(const Real      &dt,
    pnp_U.mult(pnp_SUphiV,1,1);
  
 // Laplacian and fluxes of PhiV
-   FluxBoxes fluxb(this, 1, 1);
+   FluxBoxes fluxb(this, 1, 0);
    MultiFab** phiV_flux = fluxb.get();
 	MultiFab laplacian_term(grids, dmap, 1, 0);
    compute_phiV_laplacian_term(dt, pnp_U, phiV_flux, laplacian_term);
@@ -489,8 +522,8 @@ void PeleLM::ef_NL_residual(const Real      &dt,
 
 // Residual scaling	
    if ( update_scaling ) {
-		pnp_SFne = pnp_res.norm0(0);
-		pnp_SFphiV = pnp_res.norm0(1);
+		pnp_SFne = (pnp_res.norm0(0) > 0.0) ? pnp_res.norm0(0) : 1.0 ;
+		pnp_SFphiV = (pnp_res.norm0(1) > 0.0) ? pnp_res.norm0(1) : 1.0 ;
 	   amrex::Print() << " F(ne) scaling: " << pnp_SFne << "\n";
 	   amrex::Print() << " F(PhiV) scaling: " << pnp_SFphiV << "\n";
 	}
@@ -551,7 +584,7 @@ void PeleLM::ef_bg_chrg(const Real      &dt,
 		const FArrayBox& dnfab = Dn[mfi];   
 		const FArrayBox& dnp1fab = Dnp1[mfi];
 		const FArrayBox& dhatfab = Dhat[mfi];
-	   const FArrayBox& rfab = get_new_data(RhoYdot_Type)[mfi];
+	   const FArrayBox& rfab = get_old_data(RhoYdot_Type)[mfi];
 	   FArrayBox& bgchrgfab = pnp_bgchrg[mfi];
 		ef_calc_chargedist_prov(box.loVect(), box.hiVect(),
 				                  rhoYoldfab.dataPtr(first_spec), ARLIM(rhoYoldfab.loVect()), ARLIM(rhoYoldfab.hiVect()), 
@@ -618,7 +651,7 @@ void PeleLM::compute_ne_diffusion_term(const Real      &dt,
    std::array<LinOpBCType,AMREX_SPACEDIM> mlmg_hibc;
 	ef_set_neBC(mlmg_lobc, mlmg_hibc);
 	ne_LAPL.setDomainBC(mlmg_lobc, mlmg_hibc);
-   ne_LAPL.setLevelBC(0, &nE_alias);
+   ne_LAPL.setLevelBC(0, &ne_old);
 
 // Coeff's	
    ne_LAPL.setScalars(0.0, 1.0); 
@@ -657,8 +690,8 @@ void PeleLM::compute_ne_convection_term(const Real      &dt,
    for (int d = 0; d < AMREX_SPACEDIM; ++d) {
 		pnp_Ueff[d].setVal(0.0);
 		// Build time centered grad PhiV
-		grad_phiV[d]->plus(*grad_phiV_old[d],0,1,1);
-		grad_phiV[d]->mult(0.5);
+		grad_phiV[d]->plus(*grad_phiV_old[d],0,1,0);
+		grad_phiV[d]->mult(0.5,0,1,0);
    	MultiFab::AddProduct(pnp_Ueff[d],*Ke_ec[d],0,*grad_phiV[d],0,0,1,0);
 		pnp_Ueff[d].mult(-geom.CellSize()[d]);
 		pnp_Ueff[d].plus(u_mac[d],0,1,u_mac[d].nGrow());
@@ -667,10 +700,13 @@ void PeleLM::compute_ne_convection_term(const Real      &dt,
 
 	const Real time  = state[State_Type].curTime();	// current time
 	MultiFab nE_new(grids,dmap,1,Godunov::hypgrow());
-	MultiFab::Copy(nE_new,pnp_U,0,0,1,0);
+	nE_new.setVal(0.0);
+	MultiFab::Copy(nE_new,pnp_U,0,0,1,Godunov::hypgrow());
 	nE_new.FillBoundary();
 	// TODO: FillBoundary() only works 'cause its single level right now.
 	BL_ASSERT(level==0);
+
+	Real dt_short = 0.001 * dt;
 
    {
    	FArrayBox cflux[AMREX_SPACEDIM];
@@ -842,6 +878,8 @@ void PeleLM::ef_GMRES_solve(const Real      &dt,
 		r.mult(1.0/norm_r);
 		MultiFab::Copy(KspBase[0],r, 0 ,0, 2, 0);
 
+//		showMF("pnp",b_in,"pnp_b_In",level);
+//		showMF("pnp",r,"pnp_r0norm",level);
 //		showMFsub("pnp1D",b_in,stripBox,"1Dpnp_GMRESb_in",level);
 //		showMFsub("pnp1D",r,stripBox,"1Dpnp_GMRESr0",level);
 //		amrex::Abort("Step debugging");
@@ -855,7 +893,7 @@ void PeleLM::ef_GMRES_solve(const Real      &dt,
 
 		for ( int k = 0 ; k < ef_GMRES_size ; ++k ) {		// Inner restarted GMRES loop
 
-			amrex::Print() << " --> GMRES ite: " << k << "\n"; 
+//			amrex::Print() << " --> GMRES ite: " << k << "\n"; 
 
 			ef_JtV(dt, norm_pnp_U, pnp_U, b_in, KspBase[k],r);
 			ef_applyPrecond(k,r,KspBase[k+1]);       
@@ -877,7 +915,7 @@ void PeleLM::ef_GMRES_solve(const Real      &dt,
 					GS_corr = - Hcorr;
 					MultiFab::Saxpy(KspBase[k+1],GS_corr,KspBase[row],0,0,2,0);
 				}
-				amrex::Print() << "     Dotprod with GMRES vec " << row << " : " << MultiFab::Dot(KspBase[k+1],0,KspBase[row],0,2,0) << "\n";
+//				amrex::Print() << "     Dotprod with GMRES vec " << row << " : " << MultiFab::Dot(KspBase[k+1],0,KspBase[row],0,2,0) << "\n";
 			}
 			norm_vec2 = ef_NL_norm(KspBase[k+1]);
 //			amrex::Print() << "     GMRES base " << k+1 << " norm " << norm_vec2 << "\n"; 
@@ -922,7 +960,7 @@ void PeleLM::ef_GMRES_solve(const Real      &dt,
          }
 
 		   norm_r = fabs(g[k+1]);
-			amrex::Print() << " restart GMRES residual: " << norm_r << "\n";
+//			amrex::Print() << "   restart GMRES residual: " << norm_r << "\n";
 
 //			Exit conditions. k_end used here to construct the update.			
 			if ( norm_r < rel_tol ) {
@@ -946,17 +984,17 @@ void PeleLM::ef_GMRES_solve(const Real      &dt,
 
 //		Solve H.y = g
 		y[k_end] = g[k_end]/H[k_end][k_end];
-		amrex::Print() << " y["<<k_end<<"] : " << y[k_end] << "\n";
+//		amrex::Print() << " y["<<k_end<<"] : " << y[k_end] << "\n";
 		for ( int k = k_end-1; k >= 0; --k ) {
 			Real sum_tmp = 0.0;
 			for ( int j = k+1; j <= k_end; ++j ) {
 			   sum_tmp += H[k][j] * y[j];
 			}
 			y[k] = ( g[k] - sum_tmp ) / H[k][k];
-			amrex::Print() << " y["<<k<<"] : " << y[k] << "\n";
+//			amrex::Print() << " y["<<k<<"] : " << y[k] << "\n";
 		} 
 
-		amrex::Print() << " Finished restart GMRES in : " << k_end+1 << " iterations \n";
+//		amrex::Print() << " Finished restart GMRES in : " << k_end+1 << " iterations \n";
 
 //		Compute solution update		
 		r.setVal(0.0);
@@ -965,18 +1003,20 @@ void PeleLM::ef_GMRES_solve(const Real      &dt,
 			MultiFab::Saxpy(r,y[i],KspBase[i], 0, 0, 2, 0);
 // 	   showMF("pnp",KspBase[i],"pnp_KspBase",level,i);
 		}
-		amrex::Print() << " Norm of solution update : " << ef_NL_norm(r) << " \n";
+//		amrex::Print() << " Norm of solution update : " << ef_NL_norm(r) << " \n";
 
 //		Update solution		
 		MultiFab::Add(x0,r,0,0,2,0);
 //   	showMF("pnp",x0,"pnp_x0_GMRES",level,GMRES_restart);
+//   	showMF("pnp",r,"pnp_r_GMRES",level,GMRES_restart);
 //		showMFsub("pnp1D",x0,stripBox,"1Dpnp_xendGMRES",level);
 
 		GMRES_restart += 1;
+//		amrex::Abort("Step debugging");
 
    } while( ! GMRES_converged && GMRES_restart < ef_max_GMRES_rst );
 
-//	amrex::Print() << " Finished with GMRES \n";
+	amrex::Print() << " Finished with GMRES \n";
 
 	KspBase.clear();
 
@@ -1051,7 +1091,7 @@ void PeleLM::ef_setUpPrecond (const Real      &dt,
 //    Advection part
 	   std::array<const MultiFab*,AMREX_SPACEDIM> ccoeffs{D_DECL(&pnp_Ueff[0],&pnp_Ueff[1],&pnp_Ueff[2])};
 	   pnp_pc_diff.setCCoeffs(0, ccoeffs);
-//		pnp_pc_diff.checkDiagonalDominance(0,0);
+		pnp_pc_diff.checkDiagonalDominance(0,0);
 	}
 
 // Stilda and Drift LinOp
@@ -1086,11 +1126,10 @@ void PeleLM::ef_setUpPrecond (const Real      &dt,
 		getScalingLap(&scaling_Laplacian);
 
       for (int dir = 0; dir < BL_SPACEDIM; dir++) {
-		   neKe_ec[dir]->mult(pnp_SUne/pnp_SFphiV);
+		   neKe_ec[dir]->mult(pnp_SUne/pnp_SFphiV,0,1);
 	   	neKe_ec[dir]->plus(scaling_Laplacian*pnp_SUphiV/pnp_SFphiV,0,1);
       }
 //		showMFsub("pnp1D",*neKe_ec[1],stripBox,"1DPC_StildaCoeff",level);
-//		showMF("pnp",*neKe_ec[1],"pnp_PC_StildaCoeff",level);
       pnp_pc_Stilda.setScalars(0.0,-1.0); 
 		{
 	      std::array<const MultiFab*,AMREX_SPACEDIM> bcoeffs{D_DECL(neKe_ec[0],neKe_ec[1],neKe_ec[2])};
@@ -1139,6 +1178,8 @@ void PeleLM::ef_applyPrecond ( const int      &GMRES_ite,
 	mg_drift.setVerbose(ef_PoissonVerbose);
 	mg_Stilda.setVerbose(ef_PoissonVerbose);
 
+//	showMF("pnp",v,"pnp_Pc_vIn",level);
+
 // Set-up solver tolerances
    Real S_tol     = ef_PC_MG_tol;
    Real S_tol_abs = neComp_alias.norm0() * ef_PC_MG_tol;
@@ -1150,8 +1191,9 @@ void PeleLM::ef_applyPrecond ( const int      &GMRES_ite,
 //     |       0        I |
 //     --                -- 
 	mg_diff.solve({&PneComp_alias}, {&neComp_alias}, S_tol, S_tol_abs);
-	MultiFab::Copy(Pv,v,1,1,1,1);
+	MultiFab::Copy(Pv,v,1,1,1,0);
 //	showMFsub("pnp1D",Pv,stripBox,"1DPC_Pv_AftM1",level);
+//	showMF("pnp",Pv,"pnp_Pc_PvMat1",level);
 
 //     assembling mat
 //     --       --
@@ -1159,7 +1201,8 @@ void PeleLM::ef_applyPrecond ( const int      &GMRES_ite,
 //     |         |  
 //     | -Ie   I |
 //     --       --
-   MultiFab::Saxpy(PphiVComp_alias,pnp_SUne/pnp_SFphiV,PneComp_alias,0,0,1,1); 
+   MultiFab::Saxpy(PphiVComp_alias,pnp_SUne/pnp_SFphiV,PneComp_alias,0,0,1,0); 
+//	showMF("pnp",Pv,"pnp_Pc_PvMat2",level);
 //	showMFsub("pnp1D",Pv,stripBox,"1DPC_Pv_AftM2",level);
 
 
@@ -1174,8 +1217,10 @@ void PeleLM::ef_applyPrecond ( const int      &GMRES_ite,
 	temp.setVal(0.0);
    S_tol_abs = PphiVComp_alias.norm0() * ef_PC_MG_tol;     
 	mg_Stilda.solve({&temp},{&PphiVComp_alias}, S_tol, S_tol_abs);
-	MultiFab::Copy(PphiVComp_alias, temp, 0, 0, 1, 1);
+//	mg_Stilda.apply({&temp},{&PphiVComp_alias});
+	MultiFab::Copy(PphiVComp_alias, temp, 0, 0, 1, 0);
 	temp.setVal(0.0);
+//	showMF("pnp",Pv,"pnp_Pc_PvMat3",level);
 //	showMFsub("pnp1D",Pv,stripBox,"1DPC_Pv_AftM3",level);
 
 //     Final mat   
@@ -1189,8 +1234,9 @@ void PeleLM::ef_applyPrecond ( const int      &GMRES_ite,
 	temp2.setVal(0.0);
 	mg_diff.solve({&temp2},{&temp}, S_tol, S_tol_abs);
 	temp2.mult(-1.0);
-	MultiFab::Add(PneComp_alias,temp2,0,0,1,1);
+	MultiFab::Add(PneComp_alias,temp2,0,0,1,0);
 //	showMFsub("pnp1D",Pv,stripBox,"1DPC_Pv_AftM4",level);
+//	showMF("pnp",Pv,"pnp_Pc_PvMat4",level);
 
 
 //	amrex::Abort("In applyPrecond !");
