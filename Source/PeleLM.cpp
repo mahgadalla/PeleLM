@@ -4903,7 +4903,7 @@ PeleLM::advance (Real time,
       // compute Dnp1 and DDnp1
       // iteratively lagged
       if (verbose) 
-	amrex::Print() << "Computing Dnp1 and DDnp1 (SDC iteration " << sdc_iter << ")\n";
+		amrex::Print() << "Computing Dnp1 and DDnp1 (SDC iteration " << sdc_iter << ")\n";
       BL_PROFILE_VAR_START(HTDIFF);
 #ifdef USE_WBAR
       compute_differential_diffusion_terms(Dnp1,DDnp1,DWbar,tnp1,dt);
@@ -4933,7 +4933,7 @@ PeleLM::advance (Real time,
     Forcing.setBndry(1.e30);
     FillPatch(*this,mac_divu,nGrowAdvForcing,time+0.5*dt,Divu_Type,0,1,0);
     BL_PROFILE_VAR_STOP(HTMAC);
-    showMF("sdc",Forcing,"sdc_mac_rhs1",level,sdc_iter,parent->levelSteps(level));
+//    showMF("sdc",Forcing,"sdc_mac_rhs1",level,sdc_iter,parent->levelSteps(level));
       
     // compute new-time thermodynamic pressure
     BL_PROFILE_VAR_START(HTMAC);
@@ -5039,7 +5039,7 @@ PeleLM::advance (Real time,
     }
 
     // MAC-project... and overwrite U^{ADV,*}
-    showMF("sdc",Forcing,"sdc_Forcing_for_mac",level,sdc_iter,parent->levelSteps(level));
+//    showMF("sdc",Forcing,"sdc_Forcing_for_mac",level,sdc_iter,parent->levelSteps(level));
     BL_PROFILE_VAR_START(HTMAC);
     mac_project(time,dt,S_old,&mac_divu,nGrowAdvForcing,updateFluxReg);
 
@@ -5162,9 +5162,11 @@ PeleLM::advance (Real time,
     showMF("sdc",Dhat,"sdc_Dhat_before_R",level,sdc_iter,parent->levelSteps(level));
     showMF("sdc",*aofs,"sdc_A_before_R",level,sdc_iter,parent->levelSteps(level));
 
-//#ifdef USE_EFIELD
-//	 ef_solve_PNP(dt, time, Dn, Dnp1, Dhat);
-//#endif	 
+#ifdef USE_EFIELD
+	 Forcing.setVal(0.0,nspecies+1,1,0);
+	 MultiFab ForcingNe_al(Forcing,amrex::make_alias,nspecies+1,1);
+	 ef_solve_PNP(dt, time, Dn, Dnp1, Dhat, ForcingNe_al);
+#endif	 
 
     // 
     // Compute R (F = A + 0.5(Dn - Dnp1 + DDn + DDnp1) + Dhat )
@@ -5202,7 +5204,6 @@ PeleLM::advance (Real time,
     Dhat.clear();
 
     if (verbose) amrex::Print() << "R (SDC corrector " << sdc_iter << ")\n";
-	 Forcing.setVal(0.0,nspecies+1,1,0);
 
     showMF("sdc",S_old,"sdc_Sold_before_R",level,sdc_iter,parent->levelSteps(level));
     showMF("sdc",Forcing,"sdc_Forcing_before_R",level,sdc_iter,parent->levelSteps(level));
