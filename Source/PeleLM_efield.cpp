@@ -214,6 +214,10 @@ void PeleLM::ef_solve_PNP(const Real     &dt,
 	
 	//	TODO: Compute the old diffusion term for the Godunov Forcing
 	pnp_gdnv.setVal(0.0);	
+
+	// Trick the Godunov: I need order 1 for ne
+	int slope_order = godunov->getSlopeOrder();
+	godunov->setSlopeOrder(1);
 	
 	// Get edge-averaged transport properties. Edge data is "shared"
 	FluxBoxes diff_e(this, 1, 1);
@@ -337,6 +341,9 @@ void PeleLM::ef_solve_PNP(const Real     &dt,
 	ForcingnE.mult(1.0/dt,0,1);
 	ForcingnE.minus(I_R_e,0,1,0);
 	showMF("pnp",ForcingnE,"postNewt_ForcingnE",level);
+
+	// Put back the initial order in godunov
+	godunov->setSlopeOrder(slope_order);
 
 //	amrex::Abort("Post Newton stop");
 }
