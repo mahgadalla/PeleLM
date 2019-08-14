@@ -172,6 +172,10 @@ contains
     USE user_defined_fcts_2d_module, ONLY : getZone
     use probdata_module, only : standoff, Y_bc, T_bc, u_bc, v_bc, rho_bc, h_bc, ne_bc, phiV_bc 
     use probdata_module, only : bcinit
+
+#ifdef USE_EFIELD
+    use mod_Fvar_def, only : spec_charge
+#endif
   
     implicit none
 
@@ -192,7 +196,7 @@ contains
     num_zones_defined = 2
 
 !    Take fuel mixture from pmf file
-     loc = (domnlo(2)-standoff)*100.d0
+     loc = (domnlo(2)-standoff)
      call pmf(loc,loc,pmf_vals,n)
      if (n.ne.Nspec+3) then
        call bl_pd_abort('setupbc: n(pmf) .ne. Nspec+3')
@@ -207,19 +211,30 @@ contains
      do n=1,Nspec
        Y_bc(n-1,inletzone) = Yt(n)
      end do
+
+#ifdef USE_EFIELD
+     do n=1,Nspec
+       if ( abs(spec_charge(n)) > 1.0d-12 ) then
+          Y_bc(bathID-1,inletzone) = Y_bc(bathID-1,inletzone) + Y_bc(n-1,inletzone)
+          Y_bc(n-1,inletzone) = 0.0d0
+       end if 
+       Y_bc(n-1,outletzone) = 0.0d0
+     end do
+#endif
      
      T_bc(inletzone) = pmf_vals(1)
      u_bc(inletzone) = zero
      if (V_in .lt. 0) then
-       v_bc(inletzone) = pmf_vals(2)*1.d-2
+       v_bc(inletzone) = pmf_vals(2)
      else
        v_bc(inletzone) = V_in
      endif
               
 #ifdef USE_EFIELD        
      ne_bc(inletzone) = 0.0d0
+     ne_bc(outletzone) = 0.0d0
      phiV_bc(inletzone) = 0.0d0
-     phiV_bc(outletzone) = 2.0d0
+     phiV_bc(outletzone) = 20.0d0
      IF ( hack_gauss_ne ) THEN
         T_bc(inletzone) = 298.0d0
         Y_bc(0:Nspec-1,inletzone) =  0.0d0
@@ -287,7 +302,7 @@ contains
       use mod_Fvar_def, only : bathID, domnhi, domnlo, maxspec, maxspnml 
       use probdata_module, only : standoff, pertmag
 #ifdef USE_EFIELD      
-      use mod_Fvar_def, only : iE_sp, nE, PhiV, Na, spec_charge,  CperEcharge, zk
+      use mod_Fvar_def, only : iE_sp, iH3Op, nE, PhiV, Na, spec_charge,  CperEcharge, zk
 #endif
 
       implicit none
@@ -319,9 +334,9 @@ contains
       endif
 
       do j = lo(2), hi(2)
-        y = (float(j)+.5d0)*delta(2)+domnlo(2)
+        y = (dble(j)+.5d0)*delta(2)+domnlo(2)
         do i = lo(1), hi(1)
-          x = (float(i)+.5d0)*delta(1)+domnlo(1)
+          x = (dble(i)+.5d0)*delta(1)+domnlo(1)
                
           pert = 0.d0
           if (pertmag .gt. 0.d0) then
@@ -333,8 +348,8 @@ contains
                                   + .982 * sin(2*Pi*5*(x-.014234)/Lx) )
           endif
                   
-          y1 = (y - standoff - 0.5d0*delta(2) + pert)*100.d0
-          y2 = (y - standoff + 0.5d0*delta(2) + pert)*100.d0
+          y1 = (y - standoff - 0.5d0*delta(2) + pert)
+          y2 = (y - standoff + 0.5d0*delta(2) + pert)
 
 #ifdef INTERP_PMF_AS_POINT
             y2 = (y1+y2)*0.5d0          
@@ -385,7 +400,10 @@ contains
           END IF
           IF ( hack_gauss_ne ) THEN
              Yl(:) = 0.0d0
-             Yl(bathID) = 1.0d0
+             y = (dble(j)+.5d0)*delta(2)+domnlo(2)
+             Yl(iH3Op) = 1.0d-12 / SQRT(2.0d0 * PI * 0.0000001d0) * & 
+                         EXP ( - 0.5d0 * (y - 0.005d0)**2.0d0 / 0.0000001d0 )
+             Yl(bathID) = 1.0d0 - Yl(iH3Op)
              scal(i,j,Temp) = 298.0d0
           END IF
 
@@ -399,7 +417,7 @@ contains
           scal(i,j,Trac) = 0.d0
 
           vel(i,j,1) = 0.d0
-          vel(i,j,2) = pmf_vals(2)*1.d-2
+          vel(i,j,2) = pmf_vals(2)
 
         end do
       end do
@@ -422,12 +440,12 @@ contains
          do i = lo(1), hi(1)
 #ifdef USE_EFIELD
             CD = scal(i,j,Density) * SUM(zk(:)*scal(i,j,FirstSpec:FirstSpec+Nspec-1))
-            scal(i,j,nE) = MAX(CD / CperEcharge, 1.0d-30)
-            IF ( hack_gauss_ne ) THEN
-               y = (float(j)+.5)*delta(2)+domnlo(2)
-               scal(i,j,nE) = 1.0d11 / SQRT(2.0d0 * PI * 0.0000002) * &
-                              EXP ( - 0.5d0 * (y - 0.005)**2.0d0 / 0.0000002 )
-            END IF
+            scal(i,j,nE) = MAX(CD / CperEcharge, 1.0d-24)
+            !IF ( hack_gauss_ne ) THEN
+            !   y = (dble(j)+.5d0)*delta(2)+domnlo(2)
+            !   scal(i,j,nE) = 1.0d12 / SQRT(2.0d0 * PI * 0.0000002d0) * &
+            !                  EXP ( - 0.5d0 * (y - 0.005d0)**2.0d0 / 0.0000002d0 )
+            !END IF
 #endif
             do n = 0,Nspec-1
               scal(i,j,FirstSpec+n) = scal(i,j,FirstSpec+n)*scal(i,j,Density)
