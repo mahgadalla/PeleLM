@@ -67,7 +67,7 @@ contains
 #ifdef USE_EFIELD  
 !-----------------------
 
-  subroutine bcfunction_efield(x,y,dir,norm,time,u,v,rho,Yl,T,h,ne,phiV,dx,getuv) &
+  subroutine bcfunction_efield(x,y,dir,norm,time,u,v,rho,Yl,T,h,ne_inout,phiV,dx,getuv) &
                                bind(C, name="bcfunction_efield")
 
       use network,   only: nspec
@@ -77,7 +77,7 @@ contains
       
       implicit none
 
-      REAL_T x, y, time, u, v, rho, Yl(0:*), T, h, dx(dim), ne, phiV
+      REAL_T :: x, y, time, u, v, rho, Yl(0:*), T, h, dx(dim), ne_inout, phiV
       integer dir, norm  ! This specify the direction and orientation of the face
       logical getuv
       integer :: zone
@@ -96,9 +96,9 @@ contains
         end do
         T = T_bc(zone)
         h = h_bc(zone)
-        ne = ne_bc(zone)
+        ne_inout = ne_bc(zone)
         phiV = phiV_bc(zone)
-         
+
         if (getuv .eqv. .TRUE.) then
             
           u = zero
