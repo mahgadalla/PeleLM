@@ -1,6 +1,6 @@
  &fortin
   V_in = 0.4507
-  standoff = -.028
+  standoff = -0.010d0
   pertmag = -0.0004
  /
  &heattransin
