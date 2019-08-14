@@ -780,7 +780,7 @@ end subroutine plm_extern_init
       use mod_Fvar_def, only: bathID, fuelID, oxidID, prodID, maxspnml
       use mod_Fvar_def, only: f_flag_active_control
 #ifdef USE_EFIELD      
-      use mod_Fvar_def, only: zk, invmwt, spec_charge, CperECharge, Na, iE_sp
+      use mod_Fvar_def, only: zk, invmwt, spec_charge, CperECharge, Na, iE_sp, iH3Op
 #endif
 
       implicit none
@@ -832,6 +832,7 @@ end subroutine plm_extern_init
     DO n = 1, Nspec
        CALL pphys_get_spec_name2(name,n)
        IF ( name .eq. 'E' ) iE_sp = n
+       IF ( name .eq. 'H3OP' ) iH3Op = n
     END DO
     iE_sp_inout = iE_sp - 1
     IF (iE_sp == -1) WRITE(6,*) ' .... WARNING: USE_EFIELD = TRUE but no electron found in the chem model !'

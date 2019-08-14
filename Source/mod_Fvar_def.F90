@@ -50,6 +50,7 @@ module mod_Fvar_def
 #ifdef USE_EFIELD
    integer :: nE, PhiV                                  ! nE and phiV index 
    integer :: iE_sp                                     ! electron index in species list
+   integer :: iH3Op                                     ! main anion idx in species list
    REAL_T, PARAMETER :: Na = 6.022d23                   ! Avogadro's number
    REAL_T, PARAMETER :: CperECharge = 1.60217662d-19    ! Coulomb per charge
    REAL_T, PARAMETER :: e0 = 8.854187817d-12            ! Free space permittivity (C/(V.m))
