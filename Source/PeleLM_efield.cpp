@@ -251,7 +251,7 @@ void PeleLM::ef_solve_PNP(const Real     &dt,
    pnp_U.mult(1.0/pnp_SUphiV,1,1);	
 	amrex::Print() << " ne scaling: " << pnp_SUne << "\n";
 	amrex::Print() << " PhiV scaling: " << pnp_SUphiV << "\n";
-	showMF("pnp",pnp_U,"pnp_U0",level);
+//	showMF("pnp",pnp_U,"pnp_U0",level);
 //	showMFsub("pnp1D",pnp_U,stripBox,"1Dpnp_U0",level);
 
 	if ( pnp_SUne <= 0.0 ) {
@@ -265,6 +265,7 @@ void PeleLM::ef_solve_PNP(const Real     &dt,
 	// Compute provisional CD
 //	showMF("pnp",S_old,"pnp_Sold",level);
    ef_bg_chrg(dt, Dn, Dnp1, Dhat);
+//	showMFsub("pnp1D",pnp_bgchrg,stripBox,"1Dpnp_BGchrg",level);
 
 	// Need the gradient of phiV_old
    FluxBoxes fluxb(this, 1, 0);
@@ -275,7 +276,7 @@ void PeleLM::ef_solve_PNP(const Real     &dt,
 	// first true trigger initalize the residual scaling.
 	// second true trigger initalize the preconditioner.
    ef_NL_residual( dt, pnp_U, pnp_res, true, true );
-	showMF("pnp",pnp_res,"pnp_res0",level);
+//	showMF("pnp",pnp_res,"pnp_res0",level);
 //	showMF("pnp",pnp_bgchrg,"pnp_bgchrg",level);
 //	showMFsub("pnp1D",pnp_res,stripBox,"1Dpnp_res0",level);
 	pnp_res.mult(-1.0,0,2);
@@ -309,11 +310,14 @@ void PeleLM::ef_solve_PNP(const Real     &dt,
 		//    Test exit conditions  	
 	   test_exit_newton(pnp_res, NK_ite, norm_NL_res0, norm_NL_res, exit_newton);
 
-		showMF("pnp",pnp_res,"pnp_resNewt",level,NK_ite);
-		showMF("pnp",pnp_U,"pnp_UNewt",level,NK_ite);
-		showMF("pnp",pnp_dU,"pnp_dUNewt",level,NK_ite);
+		//showMF("pnp",pnp_res,"pnp_resNewt",level,NK_ite);
+		//showMF("pnp",pnp_U,"pnp_UNewt",level,NK_ite);
+		//showMF("pnp",pnp_dU,"pnp_dUNewt",level,NK_ite);
+	   //showMFsub("pnp1D",pnp_dU,stripBox,"1D_dUNewt",level,NK_ite);
+	   //showMFsub("pnp1D",pnp_U,stripBox,"1D_UNewt",level,NK_ite);
+	   //showMFsub("pnp1D",pnp_res,stripBox,"1D_resNewt",level,NK_ite);
 
-//		if ( NK_ite == 4 ) amrex::Abort("In Newton stop");
+//		if ( NK_ite == 1 ) amrex::Abort("In Newton stop");
    } while( ! exit_newton );
 
 	// Post newton stuff
@@ -323,7 +327,7 @@ void PeleLM::ef_solve_PNP(const Real     &dt,
 	pnp_U.mult(pnp_SUne,0,1);	
    pnp_U.mult(pnp_SUphiV,1,1);	
 //	showMFsub("pnp1D",pnp_U,stripBox,"1DpostNewt_U",level);
-	showMF("pnp",pnp_U,"postNewt_U",level);
+//	showMF("pnp",pnp_U,"postNewt_U",level);
 	MultiFab::Copy(S,pnp_U,0,nE,2,0);
 
    MultiFab& I_R = get_new_data(RhoYdot_Type);
@@ -444,7 +448,7 @@ void PeleLM::test_exit_newton(const MultiFab &pnp_res,
   Real max_res = pnp_res.norm0();
   if ( max_res <= tol_Newton ) {
 	  exit_newton = true;
-	  amrex::Print() << " Final Newton res: " << max_res << "\n";
+	  amrex::Print() << " Final Newton res: " << 0.5*norm_res*norm_res << "\n";
 	  amrex::Print() << " Converged Newton ite of PNP solve \n";
   }
 
@@ -477,7 +481,11 @@ void PeleLM::ef_NL_residual(const Real      &dt,
    MultiFab** phiV_flux = fluxb.get();
 	MultiFab laplacian_term(grids, dmap, 1, 0);
    compute_phiV_laplacian_term(dt, pnp_U, phiV_flux, laplacian_term);
-//	showMFsub("pnp1D",laplacian_term,stripBox,"1DLapl_phi",level);
+//	if (update_PC) {
+//  	   showMFsub("pnp1D",laplacian_term,stripBox,"1DresphiV_Lapl",level);
+//		showMFsub("pnp1D",pnp_bgchrg,stripBox,"1DresphiV_bg",level);
+//		showMFsub("pnp1D",pnp_U,stripBox,"1DresphiV_U",level);
+//	}
 	Real scaling_Laplacian = 0.0;
 	getScalingLap(&scaling_Laplacian);
 
@@ -651,7 +659,7 @@ void PeleLM::compute_ne_diffusion_term(const Real      &dt,
    std::array<LinOpBCType,AMREX_SPACEDIM> mlmg_hibc;
 	ef_set_neBC(mlmg_lobc, mlmg_hibc);
 	ne_LAPL.setDomainBC(mlmg_lobc, mlmg_hibc);
-   ne_LAPL.setLevelBC(0, &ne_old);
+   ne_LAPL.setLevelBC(0, &nE_alias);
 
 // Coeff's	
    ne_LAPL.setScalars(0.0, 1.0); 
@@ -871,7 +879,7 @@ void PeleLM::ef_GMRES_solve(const Real      &dt,
 			beta = norm_r;
 			rel_tol = norm_r * ef_GMRES_reltol;
 		}
-	   amrex::Print() << " GMRES restart: " << GMRES_restart << " init residual: " << norm_r << "\n";
+//	   amrex::Print() << " GMRES restart: " << GMRES_restart << " init residual: " << norm_r << "\n";
 
 // 	Initialize KspBase with normalized residual		
 		g[0] = norm_r;
@@ -1016,7 +1024,7 @@ void PeleLM::ef_GMRES_solve(const Real      &dt,
 
    } while( ! GMRES_converged && GMRES_restart < ef_max_GMRES_rst );
 
-	amrex::Print() << " Finished with GMRES \n";
+//	amrex::Print() << " Finished with GMRES \n";
 
 	KspBase.clear();
 
@@ -1113,7 +1121,7 @@ void PeleLM::ef_setUpPrecond (const Real      &dt,
 	    	   center_to_edge_upwind_fancy((nEtKappaE)[mfi],(pnp_Ueff[dir])[mfi],(*neKe_ec[dir])[mfi],
 	   	                                amrex::grow(box,amrex::BASISV(dir)), ebox, 0, 
 	   	                                0, 1, geom.Domain(), bc_lo, bc_hi);
-				(*neKe_ec[dir])[mfi].mult(pnp_SUphiV/pnp_SFne*dt,ebox,0,1);
+				(*neKe_ec[dir])[mfi].mult(0.5*pnp_SUphiV/pnp_SFne*dt,ebox,0,1);
          }
       }
       pnp_pc_drift.setScalars(0.0,1.0); 
@@ -1126,7 +1134,7 @@ void PeleLM::ef_setUpPrecond (const Real      &dt,
 		getScalingLap(&scaling_Laplacian);
 
       for (int dir = 0; dir < BL_SPACEDIM; dir++) {
-		   neKe_ec[dir]->mult(pnp_SUne/pnp_SFphiV,0,1);
+		   neKe_ec[dir]->mult(pnp_SFne/pnp_SFphiV,0,1);
 	   	neKe_ec[dir]->plus(scaling_Laplacian*pnp_SUphiV/pnp_SFphiV,0,1);
       }
 //		showMFsub("pnp1D",*neKe_ec[1],stripBox,"1DPC_StildaCoeff",level);
