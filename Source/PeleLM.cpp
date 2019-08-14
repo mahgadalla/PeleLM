@@ -1001,7 +1001,7 @@ showMFsub(const std::string&   mySet,
 //    os.close();
 //    FArrayBox::setFormat(saved_format);
     std::ofstream ofs(junkname.c_str(),std::ofstream::out);                                                                                                                        
-    amrex::Print(ofs) << sub << std::endl;                                                                                                                                         
+    amrex::Print(ofs).SetPrecision(14) << sub << std::endl;
     ofs.close();
   }
 }
