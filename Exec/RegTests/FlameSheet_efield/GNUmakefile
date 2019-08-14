@@ -23,7 +23,7 @@ DEFINES+=-DALWAYS_NEW_J
 DO_2S_CONVERGENCE=FALSE
 
 #######################
-USE_SUNDIALS_3x4x = FALSE
+USE_SUNDIALS_3x4x = TRUE
 
 #######################
 
@@ -56,7 +56,8 @@ else
 	#fEXE_sources += gri30_070.f
 
 	Chemistry_Model = CH4_ion_LuSk
-	fEXE_sources += Lu30sk_ExpeSpeelman.f
+#	fEXE_sources += Lu30sk_ExpeSpeelman.f
+	F90EXE_sources += Lu30skAnions_exep_case.F90
 endif
 
 # This sets the EOS directory in $(PELE_PHYSICS_HOME)/Eos
