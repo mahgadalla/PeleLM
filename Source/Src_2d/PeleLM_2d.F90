@@ -2912,7 +2912,7 @@ contains
                               kp_sp, DIMS(kp_sp)) &
                               bind(C, name="ef_spec_mobility")
 
-    USE mod_Fvar_def, ONLY: zk
+    USE mod_Fvar_def, ONLY: zk, iE_sp, invmwt
     USE PeleLM_F,     only: pphys_getRuniversal
     use network,      only : nspec
     
@@ -2938,7 +2938,8 @@ contains
         Y(:) = rhoY(i,j,:)/rho
         CALL CKMMWY(Y(:),Wbar)
         oneoverdenom = 1.0d0 / ( rho * pphys_getRuniversal() * T(i,j) )
-        kp_sp(i,j,:) = rhoD(i,j,:) * Wbar * zk(:) * oneoverdenom
+        kp_sp(i,j,:) = rhoD(i,j,:) * 1000.0d0 / invmwt(:) * zk(:) * oneoverdenom
+        kp_sp(i,j,iE_sp) = 0.0d0
       end do
     end do
 
