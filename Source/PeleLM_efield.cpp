@@ -1,8 +1,13 @@
 void PeleLM::ef_advance_setup(const Real &time) {
 
+	// Solve for phiV_time and get gradPhiV_tn
    ef_solve_phiv(time); 
 
+	// Calc De_time, Ke_time, Kspec_time
 	ef_calc_transport(time);
+
+	// Calc Udrift_tn1/2 = +/- Kspec_tn * 0.5 (gradPhiV_tn + gradPhiV_time)
+	ef_calcUDriftSpec(time);
 }	
 
 void PeleLM::ef_calc_transport(const Real &time) {
@@ -15,6 +20,7 @@ void PeleLM::ef_calc_transport(const Real &time) {
 //	Get ptr to current version of diff	
 	MultiFab&  diff      = (whichTime == AmrOldTime) ? (*diffn_cc) : (*diffnp1_cc);
    const int nGrow      = diff.nGrow();
+	showMFsub("pnp1D",diff,stripBox,"1Dpnp_DiffSpec",level);
  
 //	A few check on the grow size of EF transport properties
    BL_ASSERT(kappaSpec_cc.nGrow() >= nGrow);
@@ -67,6 +73,54 @@ void PeleLM::ef_calc_transport(const Real &time) {
   }
 }
 
+void PeleLM::ef_calcUDriftSpec(const Real &time) {
+
+   // Edge for species mobility
+   FluxBoxes fb(this, nspecies, 0);
+   MultiFab  **kappaSpec_ec = fb.get();
+
+#ifdef _OPENMP
+#pragma omp parallel
+#endif
+   for (MFIter mfi(kappaSpec_cc,true); mfi.isValid(); ++mfi) {
+	   const Box& box = mfi.tilebox();
+
+      for (int dir = 0; dir < AMREX_SPACEDIM; dir++) {
+         FPLoc bc_lo = fpi_phys_loc(get_desc_lst()[State_Type].getBC(first_spec).lo(dir));
+	 	   FPLoc bc_hi = fpi_phys_loc(get_desc_lst()[State_Type].getBC(first_spec).hi(dir));
+	 	   const Box& ebox = mfi.nodaltilebox(dir);
+	 	   center_to_edge_fancy((kappaSpec_cc)[mfi],(*kappaSpec_ec[dir])[mfi],
+		                         amrex::grow(box,amrex::BASISV(dir)), ebox, 0, 
+		                         0, nspecies, geom.Domain(), bc_lo, bc_hi);
+      }
+   }
+
+	// Get grad phiV at time
+	MultiFab& S = get_new_data(State_Type);
+	FillPatchIterator phiVfpi(*this,S,1,time,State_Type,PhiV,1);
+	MultiFab& phiVfpi_mf = phiVfpi.get_mf();
+
+   FluxBoxes fluxb(this, nspecies, 0);
+   MultiFab** grad_phiV = fluxb.get();
+	ef_calcGradPhiV(phiVfpi_mf, grad_phiV); 
+	
+	// Build the drift velocities
+   for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+		Udrift_spec[d].setVal(0.0);
+		// Build time centered grad PhiV
+		grad_phiV[d]->plus(grad_phiV_old[d],0,1,0);
+		grad_phiV[d]->mult(0.5*geom.CellSize()[d],0,1,0);
+		for (int k = 0; k < nspecies; ++k) {
+   	   MultiFab::AddProduct(Udrift_spec[d],(*kappaSpec_ec[d]),k,(*grad_phiV[d]),0,k,1,0);
+		}
+	}
+	//showMFsub("pnp1D",Udrift_spec[1],stripBox,"1Dpnp_UdriftSpecs",level);
+	//showMFsub("pnp1D",*kappaSpec_ec[1],stripBox,"1Dpnp_KappaSpec",level);
+	//showMFsub("pnp1D",*grad_phiV[1],stripBox,"1Dpnp_grad_phiV",level);
+	
+   //amrex::Abort("In Udrift_spec");
+}
+
 void PeleLM::ef_define_data() {
    kappaSpec_cc.define(grids,dmap,nspecies,1);
    kappaElec_cc.define(grids,dmap,1,1);
@@ -74,7 +128,11 @@ void PeleLM::ef_define_data() {
 	kappaElec_ec = 0;
 	diffElec_ec  = 0;
 
-	grad_phiV_old = 0;
+	grad_phiV_old = new MultiFab[AMREX_SPACEDIM];
+   for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+		const BoxArray& edgeba = getEdgeBoxArray(d);
+	   grad_phiV_old[d].define(edgeba,dmap, 1,0);
+	}
 
 	pnp_dU.define(grids,dmap,2,1);
 	pnp_bgchrg.define(grids,dmap,1,1);
@@ -88,6 +146,12 @@ void PeleLM::ef_define_data() {
 		const BoxArray& edgeba = getEdgeBoxArray(d);
 	   pnp_Ueff[d].define(edgeba,dmap, 1,1);
 		pnp_Ueff[d].setVal(1.e40);
+	}
+
+	Udrift_spec = new MultiFab[AMREX_SPACEDIM];
+   for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+		const BoxArray& edgeba = getEdgeBoxArray(d);
+	   Udrift_spec[d].define(edgeba,dmap, nspecies,1);
 	}
 
 	pnp_SFne = 1.0;
@@ -168,6 +232,21 @@ void PeleLM::ef_solve_phiv(const Real &time) {
    PhiV_alias.mult(0.9); 
 	mlmg.solve({&PhiV_alias}, {&rhs_poisson}, S_tol, S_tol_abs);
 
+//* Need the "fluxes" to get the gradient.
+   std::array<MultiFab*, AMREX_SPACEDIM> fp{D_DECL(&grad_phiV_old[0],
+																	&grad_phiV_old[1],
+																	&grad_phiV_old[2])};
+	mlmg.getFluxes({fp});
+
+// Rescale fluxes to get right stuff regardless of cartesian or r-Z
+   for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+       grad_phiV_old[d].mult(1.0/(geom.CellSize()[d]),0,1,0);   
+		 grad_phiV_old[d].FillBoundary();
+	}
+
+// TODO: the FillBoundary() only works on single level. Will have to to something else for AMR.
+// 		For now crash if more than one level.
+	BL_ASSERT(level==0);
 }
 
 void PeleLM::ef_init() {
@@ -267,21 +346,14 @@ void PeleLM::ef_solve_PNP(const Real     &dt,
 	const Real norm_NL_U0 = ef_NL_norm(pnp_U); 
 
 	// Compute provisional CD
-//	showMF("pnp",S_old,"pnp_Sold",level);
    ef_bg_chrg(dt, Dn, Dnp1, Dhat);
 //	showMFsub("pnp1D",pnp_bgchrg,stripBox,"1Dpnp_BGchrg",level);
-
-	// Need the gradient of phiV_old
-   FluxBoxes fluxb(this, 1, 0);
-   grad_phiV_old = fluxb.get();
-	ef_calc_grad(dt, phiV_old, grad_phiV_old);
 
 	// Pre-Newton stuff	
 	// first true trigger initalize the residual scaling.
 	// second true trigger initalize the preconditioner.
    ef_NL_residual( dt, pnp_U, pnp_res, true, true );
 //	showMF("pnp",pnp_res,"pnp_res0",level);
-//	showMF("pnp",pnp_bgchrg,"pnp_bgchrg",level);
 //	showMFsub("pnp1D",pnp_res,stripBox,"1Dpnp_res0",level);
 	pnp_res.mult(-1.0,0,2);
    const Real norm_NL_res0 = ef_NL_norm(pnp_res);	
@@ -632,8 +704,6 @@ void PeleLM::ef_get_edge_transport(MultiFab *Ke_ec[BL_SPACEDIM],
 		                         0, 1, geom.Domain(), bc_lo, bc_hi);
       }
    }
-//   showMF("pnp",*De_ec[0],"pnp_De_ec_x",level);
-//   showMF("pnp",*De_ec[1],"pnp_De_ec_y",level);
 
 }
 
@@ -705,7 +775,7 @@ void PeleLM::compute_ne_convection_term(const Real      &dt,
    for (int d = 0; d < AMREX_SPACEDIM; ++d) {
 		pnp_Ueff[d].setVal(0.0);
 		// Build time centered grad PhiV
-		grad_phiV[d]->plus(*grad_phiV_old[d],0,1,0);
+		grad_phiV[d]->plus(grad_phiV_old[d],0,1,0);
 		grad_phiV[d]->mult(0.5,0,1,0);
    	MultiFab::AddProduct(pnp_Ueff[d],*Ke_ec[d],0,*grad_phiV[d],0,0,1,0);
 		pnp_Ueff[d].mult(-geom.CellSize()[d]);
@@ -808,9 +878,8 @@ void PeleLM::compute_phiV_laplacian_term(const Real      &dt,
 
 }
 
-void PeleLM::ef_calc_grad(const Real      &dt,
-								  		  MultiFab  &field,
-								        MultiFab  *grad_field[AMREX_SPACEDIM]) {	
+void PeleLM::ef_calcGradPhiV(MultiFab  &phiV,
+								     MultiFab  *grad_phiV[AMREX_SPACEDIM]) {	
 
 // Set-up Poisson operator
    LPInfo info;
@@ -826,21 +895,21 @@ void PeleLM::ef_calc_grad(const Real      &dt,
    std::array<LinOpBCType,AMREX_SPACEDIM> mlmg_hibc;
 	ef_set_PoissonBC(mlmg_lobc, mlmg_hibc);
    poisson.setDomainBC(mlmg_lobc, mlmg_hibc);
-   poisson.setLevelBC(0, &field);
+   poisson.setLevelBC(0, &phiV);
 
 // LinearSolver to get divergence.
 	MLMG mlmg(poisson);
 	MultiFab lapl(grids,dmap,1,1);
-	mlmg.apply({&lapl},{&field});
+	mlmg.apply({&lapl},{&phiV});
 
 // Need the "fluxes" to get the gradient.
-   std::array<MultiFab*,AMREX_SPACEDIM> fp{D_DECL(grad_field[0],grad_field[1],grad_field[2])};
-	mlmg.getFluxes({fp},{&field});
+   std::array<MultiFab*,AMREX_SPACEDIM> fp{D_DECL(grad_phiV[0],grad_phiV[1],grad_phiV[2])};
+	mlmg.getFluxes({fp},{&phiV});
 
 // Rescale fluxes to get right stuff regardless of cartesian or r-Z
    for (int d = 0; d < AMREX_SPACEDIM; ++d) {
-       grad_field[d]->mult(1.0/(geom.CellSize()[d]));   
-		 grad_field[d]->FillBoundary();
+       grad_phiV[d]->mult(1.0/(geom.CellSize()[d]));   
+		 grad_phiV[d]->FillBoundary();
 	}
 		 
 // TODO: the FillBoundary() only works on single level. Will have to to something else for AMR.

@@ -9,7 +9,7 @@
    static int         have_nE;
    static int         have_PhiV;
 
-// MG Poisson solver options	
+// Iterative solver options	
    static int       			    ef_PoissonMaxIter;
    static int       			    ef_PoissonVerbose;
    static int       			    ef_PoissonMaxOrder;
@@ -19,18 +19,16 @@
 	static amrex::Real   		 ef_GMRES_reltol;
    static int       			    ef_GMRES_size;
 	static amrex::Real   		 ef_PC_MG_tol;
-
-// PNP solve options	
    static int						 ef_max_NK_ite;
 
-// Data
+// PNP Data
 	amrex::MultiFab             kappaSpec_cc;
 	amrex::MultiFab             kappaElec_cc;
 	amrex::MultiFab             diffElec_cc;
    amrex::MultiFab**           kappaElec_ec;  
    amrex::MultiFab**           diffElec_ec;  
 
-	amrex::MultiFab**				 grad_phiV_old;
+	amrex::MultiFab*				 grad_phiV_old;
 
 	amrex::MultiFab             pnp_dU;
 	amrex::MultiFab             pnp_bgchrg;
@@ -39,6 +37,8 @@
 	amrex::MultiFab             phiV_old;
 	amrex::MultiFab*            pnp_Ueff;
 	amrex::MultiFab             pnp_refGC;
+
+	amrex::MultiFab*            Udrift_spec;
 
 // PC data	
 	amrex::MLABecCecLaplacian   pnp_pc_diff;
@@ -64,6 +64,9 @@
 
 // Poisson solve for PhiV with current charge distribution
 	void ef_solve_phiv(const amrex::Real &time);
+
+// Compute species drift velocity
+	void ef_calcUDriftSpec(const amrex::Real &time);
 
 // Solve PNP function: return updated PhiV and nE
 	void ef_solve_PNP(const amrex::Real      &dt,
@@ -162,9 +165,8 @@
 												      amrex::MultiFab   &phiV_laplacian_term);
 
 // Compute the phiV Laplacian term and the PhiV 'fluxes'
-   void ef_calc_grad(const amrex::Real       &dt,
-							 		amrex::MultiFab   &field,
-						         amrex::MultiFab   **grad_field);
+   void ef_calcGradPhiV(amrex::MultiFab   &phiV,
+						      amrex::MultiFab   **grad_phiV);
 
    void ef_reactionRateRhoY_pphys(amrex::FArrayBox&       RhoYdot,
                                   const amrex::FArrayBox& RhoY,
