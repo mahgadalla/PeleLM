@@ -3732,7 +3732,7 @@ PeleLM::velocity_advection_update (Real dt)
       // Do following only at initial iteration--per JBB.
       //
       if (initial_iter && is_diffusive[Xvel])
-         forcesfab.setVal(0.0);
+         tforces.setVal(0.0);
 
       const Box& sbx = Rhohalf_mfi.growntilebox();
       S.resize(sbx,BL_SPACEDIM);
@@ -3751,8 +3751,6 @@ PeleLM::velocity_advection_update (Real dt)
       godunov->Add_aofs_tf_gp(S,U_new[Rhohalf_mfi],Aofs[Rhohalf_mfi],tforces,
                               Gp[Rhohalf_mfi],halftime[i],bx,dt);
 
-      forcesfab.setVal(0.0);
-      forcesfab.copy(tforces,sbx,0,sbx,0,BL_SPACEDIM);
       if (do_mom_diff == 1)
       {
          for (int d = 0; d < BL_SPACEDIM; d++)
