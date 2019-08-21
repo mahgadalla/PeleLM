@@ -3116,6 +3116,44 @@ contains
       
   end subroutine ef_pphys_RRATERHOY
 
+  subroutine ef_lorentz(lo, hi, &
+                        rhoY, DIMS(rhoY), &
+                        ne_ar, DIMS(ne_ar), &
+                        xgradPhi, DIMS(xgradPhi), &
+                        ygradPhi, DIMS(ygradPhi), &
+                        lorentz, DIMS(lorentz)) &
+                        bind(C, name="ef_lorentz")
+
+    USE mod_Fvar_def, ONLY : zk, CperECharge
+    use network,      only : nspec
+
+    implicit none
+
+    integer :: lo(dim),hi(dim)
+    integer :: DIMDEC(rhoY)
+    integer :: DIMDEC(ne_ar)
+    integer :: DIMDEC(xgradPhi)
+    integer :: DIMDEC(ygradPhi)
+    integer :: DIMDEC(lorentz)
+    REAL_T  :: rhoY(DIMV(rhoY),1:nspec)
+    REAL_T  :: ne_ar(DIMV(ne_ar))
+    REAL_T  :: xgradPhi(DIMV(xgradPhi))
+    REAL_T  :: ygradPhi(DIMV(ygradPhi))
+    REAL_T  :: lorentz(DIMV(lorentz),1:dim)
+
+    integer :: i, j
+
+    do j=lo(2),hi(2)
+       do i=lo(1),hi(1)
+          lorentz(i,j,1) = (SUM(zk(1:nspec) * rhoY(i,j,1:nspec)) - ne_ar(i,j) * CperECharge) &
+                           * 0.5d0 * ( xgradPhi(i+1,j) + xgradPhi(i,j) )
+          lorentz(i,j,2) = (SUM(zk(1:nspec) * rhoY(i,j,1:nspec)) - ne_ar(i,j) * CperECharge) &
+                           * 0.5d0 * ( ygradPhi(i,j+1) + ygradPhi(i,j) )
+       enddo
+    enddo
+
+  end subroutine ef_lorentz
+
 #endif  
 
 end module PeleLM_2d
