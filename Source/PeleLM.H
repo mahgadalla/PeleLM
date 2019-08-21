@@ -283,6 +283,8 @@ protected:
                                         int  first_scalar,
                                         int  last_scalar) override;
 
+  virtual void velocity_advection_update (amrex::Real dt) override;
+
   virtual void velocity_diffusion_update (amrex::Real dt) override;
 
   virtual void errorEst (amrex::TagBoxArray& tags,
