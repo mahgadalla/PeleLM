@@ -9,164 +9,163 @@
    static int         have_nE;
    static int         have_PhiV;
 
-// Iterative solver options	
-   static int       			    ef_PoissonMaxIter;
-   static int       			    ef_PoissonVerbose;
-   static int       			    ef_PoissonMaxOrder;
-	static amrex::Real   		 ef_phiV_tol;
-	static amrex::Real   		 ef_lambda_jfnk;
-   static int       			    ef_max_GMRES_rst;
-	static amrex::Real   		 ef_GMRES_reltol;
-   static int       			    ef_GMRES_size;
-	static amrex::Real   		 ef_PC_MG_tol;
-   static int						 ef_max_NK_ite;
+// Iterative solver options
+   static int                  ef_PoissonMaxIter;
+   static int                  ef_PoissonVerbose;
+   static int                  ef_PoissonMaxOrder;
+   static amrex::Real          ef_phiV_tol;
+   static amrex::Real          ef_lambda_jfnk;
+   static int                  ef_max_GMRES_rst;
+   static amrex::Real          ef_GMRES_reltol;
+   static int                  ef_GMRES_size;
+   static amrex::Real          ef_PC_MG_tol;
+   static int                  ef_max_NK_ite;
 
 // PNP Data
-	amrex::MultiFab             kappaSpec_cc;
-	amrex::MultiFab             kappaElec_cc;
-	amrex::MultiFab             diffElec_cc;
-   amrex::MultiFab**           kappaElec_ec;  
-   amrex::MultiFab**           diffElec_ec;  
+   amrex::MultiFab             kappaSpec_cc;
+   amrex::MultiFab             kappaElec_cc;
+   amrex::MultiFab             diffElec_cc;
+   amrex::MultiFab**           kappaElec_ec;
+   amrex::MultiFab**           diffElec_ec;
 
-	amrex::MultiFab*				 grad_phiV_old;
+   amrex::MultiFab*            grad_phiV_old;
 
-	amrex::MultiFab             pnp_dU;
-	amrex::MultiFab             pnp_bgchrg;
-	amrex::MultiFab             pnp_gdnv;
-	amrex::MultiFab             ne_old;
-	amrex::MultiFab             phiV_old;
-	amrex::MultiFab*            pnp_Ueff;
-	amrex::MultiFab             pnp_refGC;
+   amrex::MultiFab             pnp_dU;
+   amrex::MultiFab             pnp_bgchrg;
+   amrex::MultiFab             pnp_gdnv;
+   amrex::MultiFab             ne_old;
+   amrex::MultiFab             phiV_old;
+   amrex::MultiFab*            pnp_Ueff;
+   amrex::MultiFab             pnp_refGC;
 
-	amrex::MultiFab*            Udrift_spec;
+   amrex::MultiFab*            Udrift_spec;
 
-// PC data	
-	amrex::MLABecCecLaplacian   pnp_pc_diff;
+// PC data  
+   amrex::MLABecCecLaplacian   pnp_pc_diff;
    amrex::MLABecLaplacian      pnp_pc_Stilda;
-	amrex::MLABecLaplacian	    pnp_pc_drift;
+   amrex::MLABecLaplacian      pnp_pc_drift;
 
-	amrex::Real			          pnp_SFne;
-	amrex::Real			          pnp_SFphiV;
-	amrex::Real			          pnp_SUne;
-	amrex::Real			          pnp_SUphiV;
+   amrex::Real                 pnp_SFne;
+   amrex::Real                 pnp_SFphiV;
+   amrex::Real                 pnp_SUne;
+   amrex::Real                 pnp_SUphiV;
 
-// Functions	
-	static void ef_init();
+// Functions
+   static void ef_init();
 
-// Define some multifabs for transport properties 
-	void ef_define_data();
+// Define some multifabs for transport properties
+   void ef_define_data();
 
-// SDC predictor : solve for PhiV with 'old' state and compute ef transport properties 
-	void ef_advance_setup(const amrex::Real &time);
+// SDC predictor : solve for PhiV with 'old' state and compute ef transport properties
+   void ef_advance_setup(const amrex::Real &time);
 
 // Compute EF related transport properties: Kp_sp, Kp_e, Diff_e
-	void ef_calc_transport(const amrex::Real &time);
+   void ef_calc_transport(const amrex::Real &time);
 
 // Poisson solve for PhiV with current charge distribution
-	void ef_solve_phiv(const amrex::Real &time);
+   void ef_solve_phiv(const amrex::Real &time);
 
 // Compute species drift velocity
-	void ef_calcUDriftSpec(const amrex::Real &time);
+   void ef_calcUDriftSpec(const amrex::Real &time);
 
 // Solve PNP function: return updated PhiV and nE
-	void ef_solve_PNP(const amrex::Real      &dt,
-							const amrex::Real      &time, 
-						   const amrex::MultiFab  &Dn,
-						   const amrex::MultiFab  &Dnp1,
-						   const amrex::MultiFab  &Dhat,
-						   		amrex::MultiFab  &ForcingnE);
+   void ef_solve_PNP(const amrex::Real      &dt,
+                     const amrex::Real      &time, 
+                     const amrex::MultiFab  &Dn,
+                     const amrex::MultiFab  &Dnp1,
+                     const amrex::MultiFab  &Dhat,
+                           amrex::MultiFab  &ForcingnE);
 
 // PNP NL residual function
-	void ef_NL_residual(const amrex::Real        &dt,
-							  const amrex::MultiFab    &pnp_U,
-							        amrex::MultiFab    &pnp_res,
-							        bool update_scaling = false,
-							        bool update_PC = false);
+   void ef_NL_residual(const amrex::Real        &dt,
+                       const amrex::MultiFab    &pnp_U,
+                             amrex::MultiFab    &pnp_res,
+                             bool update_scaling = false,
+                             bool update_PC = false);
 
 // Test PNP NL residual function
-	void ef_NL_residual_test(const amrex::Real       &dt,
-							       const amrex::MultiFab   &pnp_U,
-							             amrex::MultiFab   &pnp_res,
-							             bool update_scaling = false);
-
+   void ef_NL_residual_test(const amrex::Real       &dt,
+                            const amrex::MultiFab   &pnp_U,
+                                  amrex::MultiFab   &pnp_res,
+                                  bool update_scaling = false);
 
 // GMRES solve function
    void ef_GMRES_solve(const amrex::Real      &dt,
-							  const amrex::Real      &norm_U,
-							  const amrex::MultiFab  &U,
-							  const amrex::MultiFab  &res,
-							        amrex::MultiFab  &dU);
+                       const amrex::Real      &norm_U,
+                       const amrex::MultiFab  &U,
+                       const amrex::MultiFab  &res,
+                             amrex::MultiFab  &dU);
 
-// J times v function	
-	void ef_JtV(const amrex::Real      &dt,
-				   const amrex::Real      &norm_pnp_U,
-				   const amrex::MultiFab  &pnp_U,
-				   const amrex::MultiFab  &pnp_res,
-				   const amrex::MultiFab  &v_in,
-				         amrex::MultiFab  &JtV);
+// J times v function
+   void ef_JtV(const amrex::Real      &dt,
+               const amrex::Real      &norm_pnp_U,
+               const amrex::MultiFab  &pnp_U,
+               const amrex::MultiFab  &pnp_res,
+               const amrex::MultiFab  &v_in,
+                     amrex::MultiFab  &JtV);
 
 // Preconditioner set-up function. Called once per newton ite. TODO: maybe less ?
    void ef_setUpPrecond(const amrex::Real      &dt,
-								const amrex::MultiFab  &pnp_U,
-							         amrex::MultiFab  **De_ec); 
+                        const amrex::MultiFab  &pnp_U,
+                              amrex::MultiFab  **De_ec);
 
 // Apply the preconditioner to any vector v.
-   void ef_applyPrecond(const int				  &GMRES_ite,
-								const amrex::MultiFab  &v,
-								      amrex::MultiFab  &Pv); 	
+   void ef_applyPrecond(const int              &GMRES_ite,
+                        const amrex::MultiFab  &v,
+                              amrex::MultiFab  &Pv);
 
 // Residual norm
    amrex::Real ef_NL_norm(const amrex::MultiFab   &pnp_vec);
    void ef_NL_norm(const amrex::MultiFab             &pnp_vec,
-						       amrex::Vector<amrex::Real>  &norm);
+                         amrex::Vector<amrex::Real>  &norm);
 
 // PNP provisional charge distribution
-	void ef_bg_chrg(const amrex::Real      &dt,
-						 const amrex::MultiFab  &Dn,
-						 const amrex::MultiFab  &Dnp1,
-						 const amrex::MultiFab  &Dhat);
+   void ef_bg_chrg(const amrex::Real      &dt,
+                   const amrex::MultiFab  &Dn,
+                   const amrex::MultiFab  &Dnp1,
+                   const amrex::MultiFab  &Dhat);
 
 // PNP exit Newton test
-	void test_exit_newton(const amrex::MultiFab &pnp_U,
-								 const int             &NK_ite,
-								 const amrex::Real     &norm0,
-								 const amrex::Real     &norm,
-								 bool                  & exit_newton);
+   void test_exit_newton(const amrex::MultiFab &pnp_U,
+                        const int             &NK_ite,
+                        const amrex::Real     &norm0,
+                        const amrex::Real     &norm,
+                        bool                  & exit_newton);
 
 // PNP Newton linesearch
-	void ef_linesearch(const amrex::Real     	&dt,
-							 amrex::MultiFab 		  	&pnp_U,
-							 amrex::MultiFab 			&pnp_dU,
-							 amrex::MultiFab 			&pnp_res,
-							 amrex::Real     			&norm_U,
-							 amrex::Real     			&norm_res);
+   void ef_linesearch(const amrex::Real     &dt,
+                           amrex::MultiFab &pnp_U,
+                           amrex::MultiFab &pnp_dU,
+                           amrex::MultiFab &pnp_res,
+                           amrex::Real     &norm_U,
+                           amrex::Real     &norm_res);
 
 // Get electron edge transport properties
-	void ef_get_edge_transport(amrex::MultiFab** ke_ec,
-										amrex::MultiFab** De_ec);
+   void ef_get_edge_transport(amrex::MultiFab** ke_ec,
+                             amrex::MultiFab** De_ec);
 
 // Compute the electron diffusion term
    void compute_ne_diffusion_term(const amrex::Real       &dt,
-											 const amrex::MultiFab   &pnp_U,
-											       amrex::MultiFab** De_ec,
-											       amrex::MultiFab   &diff_ne_term);
+                                  const amrex::MultiFab   &pnp_U,
+                                        amrex::MultiFab** De_ec,
+                                        amrex::MultiFab   &diff_ne_term);
 
 // Compute the electron convection term
    void compute_ne_convection_term(const amrex::Real       &dt,
-											   amrex::MultiFab   &pnp_U,	
-											        amrex::MultiFab** Ke_ec,
-											        amrex::MultiFab** phiV_fluxes,
-											        amrex::MultiFab   &conv_ne_term);
+                                         amrex::MultiFab   &pnp_U,
+                                         amrex::MultiFab** Ke_ec,
+                                         amrex::MultiFab** phiV_fluxes,
+                                         amrex::MultiFab   &conv_ne_term);
 
 // Compute the phiV Laplacian term and the PhiV 'fluxes'
    void compute_phiV_laplacian_term(const amrex::Real       &dt,
-												const amrex::MultiFab   &pnp_U,
-											         amrex::MultiFab** phiV_fluxes,
-												      amrex::MultiFab   &phiV_laplacian_term);
+                                    const amrex::MultiFab   &pnp_U,
+                                          amrex::MultiFab** phiV_fluxes,
+                                          amrex::MultiFab   &phiV_laplacian_term);
 
 // Compute the phiV Laplacian term and the PhiV 'fluxes'
    void ef_calcGradPhiV(amrex::MultiFab   &phiV,
-						      amrex::MultiFab   **grad_phiV);
+                        amrex::MultiFab   **grad_phiV);
 
    void ef_reactionRateRhoY_pphys(amrex::FArrayBox&       RhoYdot,
                                   const amrex::FArrayBox& RhoY,
@@ -179,6 +178,10 @@
                                   int              sCompT,
                                   int              sCompnE,
                                   int              sCompRhoYdot) const;
+
+// Compute the Lorentz forces used in the momemtum eq.
+   void ef_calcLorentz(const amrex::Real       &time,
+                             amrex::MultiFab   &lorentz);
 
 // Time step estimate
    amrex::Real ef_estTimeStep();
