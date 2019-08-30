@@ -56,6 +56,9 @@
                           const amrex::Real* T,    ARLIM_P(Tlo),       ARLIM_P(Thi),
                           amrex::Real*    RhoYdot, ARLIM_P(RhoYdotlo), ARLIM_P(RhoYdothi) );
 
+  void floor_nE(const int* lo,  const int* hi,
+                const amrex::Real* nE_ar,   ARLIM_P(nElo),    ARLIM_P(nEhi));
+
 // Compute lorentz forces for each space dir.
   void ef_lorentz(const int* lo,  const int* hi,
                   const amrex::Real* rhoY,     ARLIM_P(rhoYlo),     ARLIM_P(rhoYhi),
@@ -66,5 +69,15 @@
                   const amrex::Real* zgradPhi, ARLIM_P(zgradPhilo), ARLIM_P(zgradPhihi),
 #endif
                   amrex::Real* lorentz,        ARLIM_P(lorentzlo),  ARLIM_P(lorentzhi) );
+
+// Compute the min dt
+   void ef_minTimeStep(const int* lo,  const int* hi,
+                       const amrex::Real* U,    ARLIM_P(Ulo),    ARLIM_P(Uhi),
+                       const amrex::Real* xUdr, ARLIM_P(xUdrlo), ARLIM_P(xUdrhi),
+                       const amrex::Real* yUdr, ARLIM_P(yUdrlo), ARLIM_P(yUdrhi),
+#if AMREX_SPACEDIM == 3
+                       const amrex::Real* zUdr, ARLIM_P(zUdrlo), ARLIM_P(zUdrhi),
+#endif
+                       const amrex::Real* dx, amrex::Real* cfl, amrex::Real* dt);
 
   void getScalingLap(amrex::Real* scaling);
