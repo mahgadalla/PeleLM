@@ -40,7 +40,7 @@ module PeleLM_2d
              pphys_HMIXfromTY, pphys_RHOfromPTY, FORT_AVERAGE_EDGE_STATES
 
 #ifdef USE_EFIELD          
-  public ::  ef_calc_rhs_poisson, ef_pphys_RRATERHOY
+  public ::  ef_calc_rhs_poisson, ef_pphys_RRATERHOY, floor_nE
 #endif
 
 contains
@@ -2880,7 +2880,7 @@ contains
                                  rhoY, DIMS(rhoY), ne_ar, DIMS(ne_ar)) &
                                  bind(C, name="ef_calc_rhs_poisson")
 
-    USE mod_Fvar_def, ONLY : zk, CperECharge, e0, er                         
+    USE mod_Fvar_def, ONLY : zk, CperECharge, e0, er
     use network,      only : nspec
 
     implicit none
@@ -2892,7 +2892,7 @@ contains
     REAL_T  :: rhs(DIMV(rhs))
     REAL_T  :: rhoY(DIMV(rhoY),1:nspec)
     REAL_T  :: ne_ar(DIMV(ne_ar))
-      
+
     integer :: i, j
     REAL_T :: factor_rhs
 
@@ -2915,7 +2915,7 @@ contains
     USE mod_Fvar_def, ONLY: zk, iE_sp, invmwt
     USE PeleLM_F,     only: pphys_getRuniversal
     use network,      only : nspec
-    
+
     implicit none
 
     integer :: lo(dim),hi(dim)
@@ -2927,7 +2927,7 @@ contains
     REAL_T  :: rhoY(DIMV(rhoY),nspec)
     REAL_T  :: rhoD(DIMV(rhoD),nspec)
     REAL_T  :: kp_sp(DIMV(kp_sp),nspec)
-      
+
     integer :: i, j
     REAL_T :: Wbar, rho, oneoverdenom
     REAL_T, DIMENSION(1:Nspec) :: Y
@@ -2965,7 +2965,7 @@ contains
     REAL_T  :: rhoY(DIMV(rhoY),nspec)
     REAL_T  :: phiV(DIMV(phiV))
     REAL_T  :: kp_e(DIMV(kp_e))
-      
+
     integer :: i, j
 
     do j = lo(2), hi(2)
@@ -2987,7 +2987,7 @@ contains
     USE mod_Fvar_def, ONLY: Na, CperECharge
     USE PeleLM_F,     only: pphys_getRuniversal
     use network,      only : nspec
-    
+
     implicit none
 
     integer :: lo(dim),hi(dim)
@@ -3001,12 +3001,12 @@ contains
     REAL_T  :: phiV(DIMV(phiV))
     REAL_T  :: kp_e(DIMV(kp_e))
     REAL_T  :: diff_e(DIMV(diff_e))
-      
+
     integer :: i, j
 
     REAL_T :: oneoverdenom
 
-    oneoverdenom = 1.0d0 / ( Na * CperECharge ) 
+    oneoverdenom = 1.0d0 / ( Na * CperECharge )
 
     do j = lo(2), hi(2)
       do i = lo(1), hi(1)
@@ -3016,7 +3016,7 @@ contains
 
   end subroutine ef_elec_diffusivity
 
-! Compute provisional ions charge distribution divided by elementary charge.   
+! Compute provisional ions charge distribution divided by elementary charge.
   subroutine ef_calc_chargedist_prov(lo, hi, &
                                      rhoY_old, DIMS(rhoY_old), &
                                      AofS, DIMS(AofS), &
@@ -3049,16 +3049,19 @@ contains
   REAL_T  :: bg_chrg(DIMV(bg_chrg))
   REAL_T  :: dt
 
-  integer :: i, j
+  integer :: i, j, k
 
   REAL_T, DIMENSION(1:nspec) :: rhoYprov
 
   do j = lo(2), hi(2)
     do i = lo(1), hi(1)
-      rhoYprov(:) = rhoY_old(i,j,:) + dt * ( AofS(i,j,:) + &
-                                             0.5d0 * ( Dn(i,j,:) - Dnp1(i,j,:) ) + &
-                                             Dhat(i,j,:) + &
-                                             I_R(i,j,:) )
+      do k = 1, nspec
+        rhoYprov(k) = rhoY_old(i,j,k) + dt * ( AofS(i,j,k) + &
+                                               0.5d0 * ( Dn(i,j,k) - Dnp1(i,j,k) ) + &
+                                               Dhat(i,j,k) + &
+                                               I_R(i,j,k) )
+        rhoYprov(k) = MAX(rhoYprov(k),0.0d0) ! TODO : is this clip necessary ??
+      enddo
       bg_chrg(i,j) = SUM(zk(1:nspec) * rhoYprov(1:nspec)) / CperECharge
     end do
   end do
@@ -3104,7 +3107,7 @@ contains
 
             Hmix = RhoH(i,j) * rhoinv * 1.0d4
             Temp = T(i,j)
-            call get_t_given_hY(Hmix, Yk(1:nspec), Temp, lierr);
+            call get_t_given_hY(Hmix, Yk(1:nspec), Temp, lierr)
             call CKWC(Temp,Conc(1:nspec),Wdot(1:nspec))
 
             RhoYdot(i,j,1:nspec) = Wdot(1:nspec) * mwt(1:nspec) * 1.0d3
@@ -3113,7 +3116,7 @@ contains
 
          end do
       end do
-      
+
   end subroutine ef_pphys_RRATERHOY
 
   subroutine ef_lorentz(lo, hi, &
@@ -3154,6 +3157,68 @@ contains
 
   end subroutine ef_lorentz
 
-#endif  
+  subroutine floor_nE(lo, hi, ar_nE,  DIMS(ar_nE))bind(C, name="floor_nE")
+
+    implicit none
+
+    integer lo(dim),hi(dim)
+    integer DIMDEC(ar_nE)
+    REAL_T  ar_nE(DIMV(ar_nE))
+
+    integer i, j, n
+
+    do j=lo(2),hi(2)
+      do i=lo(1),hi(1)
+        ar_nE(i,j) = max(0.d0,ar_nE(i,j))
+      enddo
+    enddo
+
+  end subroutine floor_nE
+
+  subroutine ef_minTimeStep(lo, hi, &
+                            Uadv, DIMS(Uadv), &
+                            xUdr, DIMS(xUdr), &
+                            yUdr, DIMS(yUdr), &
+                            dx, cfl, dtmin) &
+                            bind(C, name="ef_minTimeStep")
+
+    use network,      only : nspec
+
+    implicit none
+
+    integer :: lo(dim),hi(dim)
+    integer :: DIMDEC(Uadv)
+    integer :: DIMDEC(xUdr)
+    integer :: DIMDEC(yUdr)
+    REAL_T  :: Uadv(DIMV(Uadv),1:dim)
+    REAL_T  :: xUdr(DIMV(xUdr),1:nspec)
+    REAL_T  :: yUdr(DIMV(yUdr),1:nspec)
+    REAL_T  :: dx(dim), cfl, dtmin
+
+    integer :: i, j, k
+    REAL_T  :: Ux_eff, Uy_eff
+    REAL_T  :: Ux_max, Uy_max
+
+    Ux_max = 0.0d0
+    Uy_max = 0.0d0
+
+    do j=lo(2),hi(2)
+       do i=lo(1),hi(1)
+          Ux_eff = 0.0d0
+          Uy_eff = 0.0d0
+          do k = 1, nspec
+             Ux_eff = MAX(Ux_eff, ABS(Uadv(i,j,1)+0.5*(xUdr(i,j,k)+xUdr(i+1,j,k))))
+             Uy_eff = MAX(Uy_eff, ABS(Uadv(i,j,2)+0.5*(yUdr(i,j,k)+yUdr(i,j+1,k))))
+          enddo
+          Ux_max = MAX(Ux_max, Ux_eff)
+          Uy_max = MAX(Uy_max, Uy_eff)
+       enddo
+    enddo
+
+    dtmin = MIN(dx(1)/Ux_max,dx(2)/Uy_max)
+    dtmin = dtmin * cfl
+
+  end subroutine ef_minTimeStep
+#endif
 
 end module PeleLM_2d
