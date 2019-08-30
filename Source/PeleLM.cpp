@@ -960,6 +960,7 @@ showMFsub(const std::string&   mySet,
           const MultiFab&      mf,
           const Box&           box,
           const std::string&   name,
+          int                  sdcit = -1,
           int                  lev = -1,
           int                  iter = -1) // Default value = no append 2nd integer
 {
@@ -974,6 +975,9 @@ showMFsub(const std::string&   mySet,
     ParallelDescriptor::Barrier();
 
     std::string junkname = name;
+    if (sdcit>=0) {
+      junkname = amrex::Concatenate(junkname+"_",sdcit,1);
+    }
     if (lev>=0) {
       junkname = amrex::Concatenate(junkname+"_",lev,1);
     }
@@ -1916,15 +1920,15 @@ PeleLM::estTimeStep ()
     amrex::Print() << "PeleLM::estTimeStep(): timestep reduced from " 
 		   << ns_estdt << " to " << estdt << '\n';
 
-//#ifdef USE_EFIELD
-//  ns_estdt = estdt;	
-//  Real  ion_estdt = ef_estTimeStep();
-//  estdt = std::min(estdt, ion_estdt);
-//
-//  if (estdt < ns_estdt && verbose)
-//    amrex::Print() << "PeleLM::estTimeStep(): efield timestep reduced from " 
-//		   << ns_estdt << " to " << estdt << '\n';
-//#endif			
+#ifdef USE_EFIELD
+  ns_estdt = estdt;	
+  Real  ion_estdt = ef_estTimeStep();
+  estdt = std::min(estdt, ion_estdt);
+
+  if (estdt < ns_estdt && verbose)
+    amrex::Print() << "PeleLM::estTimeStep(): efield timestep reduced from " 
+		   << ns_estdt << " to " << estdt << '\n';
+#endif			
 
   if (verbose > 1)
   {
@@ -4837,7 +4841,6 @@ PeleLM::predict_velocity (Real  dt)
     }
   }
 
-  showMF("pnp",u_mac[1],"pnp_UmacPred",level,parent->levelSteps(level));
   if (verbose > 1)
   {
     const int IOProc   = ParallelDescriptor::IOProcessorNumber();
@@ -4942,6 +4945,10 @@ PeleLM::advance (Real time,
       const FArrayBox& species = S_old[mfi];
       floor_spec(box.loVect(), box.hiVect(), species.dataPtr(first_spec),
                      ARLIM(species.loVect()), ARLIM(species.hiVect()));
+#ifdef USE_EFIELD      
+      floor_nE(box.loVect(), box.hiVect(), species.dataPtr(nE),
+               ARLIM(species.loVect()), ARLIM(species.hiVect()));
+#endif
     }
   }
   BL_PROFILE_VAR_STOP(HTDIFF);
@@ -5351,6 +5358,9 @@ PeleLM::advance (Real time,
     BL_PROFILE_VAR_STOP(HTREAC);
     showMF("sdc",S_new,"sdc_Snew_after_R",level,sdc_iter,parent->levelSteps(level));
 
+    showMFsub("pnp",Forcing,stripBox,"pnp_Forcing_for_R",sdc_iter,level,parent->levelSteps(level));
+    showMFsub("pnp",S_new,stripBox,"pnp_Snew_SDC",sdc_iter,level,parent->levelSteps(level));
+
     BL_PROFILE_VAR_START(HTDIFF);
     if (floor_species == 1)
     {
@@ -5363,6 +5373,10 @@ PeleLM::advance (Real time,
         const FArrayBox& species = S_new[mfi];
         floor_spec(box.loVect(), box.hiVect(),
                        species.dataPtr(first_spec), ARLIM(species.loVect()),  ARLIM(species.hiVect()));
+#ifdef USE_EFIELD      
+        floor_nE(box.loVect(), box.hiVect(), species.dataPtr(nE),
+                 ARLIM(species.loVect()), ARLIM(species.hiVect()));
+#endif
       }
     }
     BL_PROFILE_VAR_STOP(HTDIFF);
@@ -5373,6 +5387,7 @@ PeleLM::advance (Real time,
     setThermoPress(tnp1);
     BL_PROFILE_VAR_STOP(HTMAC);
   }
+  showMFsub("pnp",S_new,stripBox,"pnp_Snew_after_SDC",level,parent->levelSteps(level));
 
   Dn.clear();
   DDn.clear();
