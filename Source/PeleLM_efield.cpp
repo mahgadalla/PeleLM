@@ -117,6 +117,8 @@ void PeleLM::ef_calcUDriftSpec(const Real &time) {
    //showMFsub("pnp1D",Udrift_spec[1],stripBox,"1Dpnp_UdriftSpecs",level);
    //showMFsub("pnp1D",*kappaSpec_ec[1],stripBox,"1Dpnp_KappaSpec",level);
    //showMFsub("pnp1D",*grad_phiV[1],stripBox,"1Dpnp_grad_phiV",level);
+   //showMF("pnp",*grad_phiV[1],"1Dpnp_grad_phiV",level);
+   //showMF("pnp",grad_phiV_old[1],"1Dpnp_grad_phiV_old",level);
 
    //amrex::Abort("In Udrift_spec");
 }
@@ -291,6 +293,8 @@ void PeleLM::ef_solve_PNP(const Real     &dt,
 
    BL_PROFILE("EF::ef_solve_PNP()");
 
+   const Real strt_time = ParallelDescriptor::second();
+
    // TODO: Compute the old diffusion term for the Godunov Forcing
    pnp_gdnv.setVal(0.0);
 
@@ -334,7 +338,7 @@ void PeleLM::ef_solve_PNP(const Real     &dt,
    pnp_U.mult(1.0/pnp_SUphiV,1,1);
    amrex::Print() << " ne scaling: " << pnp_SUne << "\n";
    amrex::Print() << " PhiV scaling: " << pnp_SUphiV << "\n";
-// showMF("pnp",pnp_U,"pnp_U0",level);
+   showMF("pnp",pnp_U,"pnp_U0",level);
 // showMFsub("pnp1D",pnp_U,stripBox,"1Dpnp_U0",level);
 
    if ( pnp_SUne <= 0.0 ) {
@@ -353,7 +357,7 @@ void PeleLM::ef_solve_PNP(const Real     &dt,
    // first true trigger initalize the residual scaling.
    // second true trigger initalize the preconditioner.
    ef_NL_residual( dt, pnp_U, pnp_res, true, true );
-// showMF("pnp",pnp_res,"pnp_res0",level);
+   showMF("pnp",pnp_res,"pnp_res0",level);
 // showMFsub("pnp1D",pnp_res,stripBox,"1Dpnp_res0",level);
    pnp_res.mult(-1.0,0,2);
    const Real norm_NL_res0 = ef_NL_norm(pnp_res);
@@ -386,9 +390,9 @@ void PeleLM::ef_solve_PNP(const Real     &dt,
       //    Test exit conditions
       test_exit_newton(pnp_res, NK_ite, norm_NL_res0, norm_NL_res, exit_newton);
 
-      //showMF("pnp",pnp_res,"pnp_resNewt",level,NK_ite);
-      //showMF("pnp",pnp_U,"pnp_UNewt",level,NK_ite);
-      //showMF("pnp",pnp_dU,"pnp_dUNewt",level,NK_ite);
+      showMF("pnp",pnp_res,"pnp_resNewt",level,NK_ite);
+      showMF("pnp",pnp_U,"pnp_UNewt",level,NK_ite);
+      showMF("pnp",pnp_dU,"pnp_dUNewt",level,NK_ite);
       //showMFsub("pnp1D",pnp_dU,stripBox,"1D_dUNewt",level,NK_ite);
       //showMFsub("pnp1D",pnp_U,stripBox,"1D_UNewt",level,NK_ite);
       //showMFsub("pnp1D",pnp_res,stripBox,"1D_resNewt",level,NK_ite);
@@ -412,12 +416,25 @@ void PeleLM::ef_solve_PNP(const Real     &dt,
    ForcingnE.plus(pnp_U,0,1,0);
    ForcingnE.mult(1.0/dt,0,1);
    ForcingnE.minus(I_R_e,0,1,0);
-   showMF("pnp",ForcingnE,"postNewt_ForcingnE",level);
+//   showMF("pnp",ForcingnE,"postNewt_ForcingnE",level);
 
    // Put back the initial order in godunov
    godunov->setSlopeOrder(slope_order);
 
 // amrex::Abort("Post Newton stop");
+  if (verbose)
+  {
+    const int IOProc = ParallelDescriptor::IOProcessorNumber();
+
+    Real mx = ParallelDescriptor::second() - strt_time, mn = mx;
+
+    ParallelDescriptor::ReduceRealMin(mn,IOProc);
+    ParallelDescriptor::ReduceRealMax(mx,IOProc);
+
+    amrex::Print() << "PeleLM_efield::pnp_solve(): lev: " << level << ", time: ["
+		   << mn << " ... " << mx << "]\n";
+  }
+
 }
 
 Real PeleLM::ef_NL_norm(const MultiFab &pnp_vec) {
@@ -438,7 +455,7 @@ void PeleLM::ef_linesearch(const Real     &dt,
       Real alpha = 0.0001;
       Real lambdared_min = 0.1;
       Real lambdared_max = 0.5;
-      int  max_ls_its = 10;
+      int  max_ls_its = 15;
 
       MultiFab pnp_Utmp(grids,dmap,2,Godunov::hypgrow());
       pnp_Utmp.setVal(0.0);
@@ -456,7 +473,7 @@ void PeleLM::ef_linesearch(const Real     &dt,
       if (initslope > 0.0)  initslope = -initslope;
       if (initslope == 0.0) initslope = -1.0;
 
-      //amrex::Print() << " Initslope: " << initslope << "\n";
+      amrex::Print() << " Initslope: " << initslope << "\n";
 
       bool done_linesearch = false;
       Real lambda = 1.0;
@@ -476,35 +493,35 @@ void PeleLM::ef_linesearch(const Real     &dt,
          obj_new = 0.5*norm_LS_res*norm_LS_res;
          sufficient_reduction = obj_old + lambda*alpha*initslope;
          //amrex::Abort("Abort in linesearch");
-         //if ( obj_new <= sufficient_reduction ) {
-         // done_linesearch = true;
-         // if ( lambda == 1.0 ) amrex::Print() << " Taking full Newton step \n";
-         //}   else {
-         // amrex::Print() << " lambda: " << lambda << " . obj_new: " << obj_new << " .Red: " << sufficient_reduction << "\n";
-         // if ( lambda == 1.0 ) {
-         //    lambdatmp = -initslope / ( 2.0 * ( obj_new - obj_old - initslope) );
-         // } else {
-         //    r = (obj_new - obj_old - lambda*initslope)/(lambda*lambda);
-         //    rprv = (obj_newprv - obj_old - lambdaprv*initslope)/(lambdaprv*lambdaprv);
-         //    a = (r - rprv)/(lambda - lambdaprv);
-         //    b = (-lambdaprv*r + lambda*rprv)/(lambda - lambdaprv);
-         //    if ( a == 0.0 ) {
-         //       lambdatmp = -initslope / ( 2.0 * b );
-         //    } else {
-         //       disc = b*b - 3.0*a*initslope;
-         //       if (disc < 0.0) disc = 0.0;
-         //       lambdatmp = ( - b + pow(disc,0.5) ) / (3.0*a);
-         //    }
-         // }
-         // lambdaprv = lambda;
-         // obj_newprv = obj_new;
-         // if (lambdatmp >  lambdared_max*lambda) lambdatmp = lambdared_max*lambda;
-         //  if (lambdatmp <= lambdared_min*lambda) lambdatmp = lambdared_min*lambda;
-         // lambda = lambdatmp;
-         //}
-         //ls_its += 1;
-         //if ( ls_its >= max_ls_its ) done_linesearch = true;
-         done_linesearch = true;
+         if ( obj_new <= sufficient_reduction ) {
+            done_linesearch = true;
+            if ( lambda == 1.0 ) amrex::Print() << " Taking full Newton step \n";
+         } else {
+            amrex::Print() << " lambda: " << lambda << " . obj_new: " << obj_new << " .Red: " << sufficient_reduction << "\n";
+            if ( lambda == 1.0 ) {
+               lambdatmp = -initslope / ( 2.0 * ( obj_new - obj_old - initslope) );
+            } else {
+               r = (obj_new - obj_old - lambda*initslope)/(lambda*lambda);
+               rprv = (obj_newprv - obj_old - lambdaprv*initslope)/(lambdaprv*lambdaprv);
+               a = (r - rprv)/(lambda - lambdaprv);
+               b = (-lambdaprv*r + lambda*rprv)/(lambda - lambdaprv);
+               if ( a == 0.0 ) {
+                  lambdatmp = -initslope / ( 2.0 * b );
+               } else {
+                  disc = b*b - 3.0*a*initslope;
+                  if (disc < 0.0) disc = 0.0;
+                  lambdatmp = ( - b + pow(disc,0.5) ) / (3.0*a);
+               }
+            }
+            lambdaprv = lambda;
+            obj_newprv = obj_new;
+            if (lambdatmp >  lambdared_max*lambda) lambdatmp = lambdared_max*lambda;
+            if (lambdatmp <= lambdared_min*lambda) lambdatmp = lambdared_min*lambda;
+            lambda = lambdatmp;
+         }
+         ls_its += 1;
+         if ( ls_its >= max_ls_its ) done_linesearch = true;
+         //done_linesearch = true;
       } while (!done_linesearch);
 
       //amrex::Abort("Abort in linesearch");
@@ -522,7 +539,7 @@ void PeleLM::test_exit_newton(const MultiFab &pnp_res,
                               const Real     &norm_res,
                                     bool     &exit_newton) {
 
-  const Real tol_Newton = pow(1.0e-16,2.0/3.0);
+  const Real tol_Newton = pow(1.0e-13,2.0/3.0);
   Real max_res = pnp_res.norm0();
   if ( max_res <= tol_Newton ) {
      exit_newton = true;
@@ -790,7 +807,7 @@ void PeleLM::compute_ne_convection_term(const Real      &dt,
    // TODO: FillBoundary() only works 'cause its single level right now.
    BL_ASSERT(level==0);
 
-   Real dt_short = 0.001 * dt;
+   Real dt_short = 0.00 * dt;
 
    {
       FArrayBox cflux[AMREX_SPACEDIM];
@@ -820,7 +837,7 @@ void PeleLM::compute_ne_convection_term(const Real      &dt,
 
          state_bc = fetchBCArray(State_Type,bx,nE,1);
 
-         godunov->AdvectScalars(bx, dx, dt,
+         godunov->AdvectScalars(bx, dx, dt_short,
                                 D_DECL( area[0][mfi],     area[1][mfi],     area[2][mfi]),
                                 D_DECL( pnp_Ueff[0][mfi], pnp_Ueff[1][mfi], pnp_Ueff[2][mfi]),
                                 D_DECL( cflux[0],           cflux[1],           cflux[2]),
@@ -998,7 +1015,7 @@ void PeleLM::ef_GMRES_solve(const Real      &dt,
                GS_corr = - Hcorr;
                MultiFab::Saxpy(KspBase[k+1],GS_corr,KspBase[row],0,0,2,0);
             }
-//          amrex::Print() << "     Dotprod with GMRES vec " << row << " : " << MultiFab::Dot(KspBase[k+1],0,KspBase[row],0,2,0) << "\n";
+//          amrex::Print() << "     Dotprod with GMRES vec " << row << " : " << MultiFab::Dot(KspBase[k+1] 0,KspBase[row],0,2,0) << "\n";
          }
          norm_vec2 = ef_NL_norm(KspBase[k+1]);
 //       amrex::Print() << "     GMRES base " << k+1 << " norm " << norm_vec2 << "\n";
@@ -1043,7 +1060,7 @@ void PeleLM::ef_GMRES_solve(const Real      &dt,
          }
 
          norm_r = fabs(g[k+1]);
-//       amrex::Print() << "   restart GMRES residual: " << norm_r << "\n";
+//       amrex::Print() << "   GMRES residual: " << norm_r/beta << "\n";
 
 //       Exit conditions. k_end used here to construct the update.
          if ( norm_r < rel_tol ) {
@@ -1155,6 +1172,9 @@ void PeleLM::ef_setUpPrecond (const Real      &dt,
    {
 //    Scalars includes the scaling of the Jacobian
       pnp_pc_diff.setScalars(-pnp_SUne/pnp_SFne, -dt*pnp_SUne/pnp_SFne, dt*pnp_SUne/pnp_SFne);
+      //pnp_pc_diff.setScalars(-1.0, -dt, dt);
+      Real omega = 0.2;
+      pnp_pc_diff.setRelaxation(omega);
 //    Diagonal part
       MultiFab dummy(grids,dmap,1,1);
       dummy.setVal(1.0);
@@ -1165,7 +1185,10 @@ void PeleLM::ef_setUpPrecond (const Real      &dt,
 //    Advection part
       std::array<const MultiFab*,AMREX_SPACEDIM> ccoeffs{D_DECL(&pnp_Ueff[0],&pnp_Ueff[1],&pnp_Ueff[2])};
       pnp_pc_diff.setCCoeffs(0, ccoeffs);
-      pnp_pc_diff.checkDiagonalDominance(0,0);
+//      pnp_pc_diff.checkDiagonalDominance(0,0);
+//      showMF("pnp",pnp_Ueff[0],"pnp_Ueffx",level);
+//      showMF("pnp",pnp_Ueff[1],"pnp_Ueffy",level);
+//      amrex::Abort("In Check diag !");
    }
 
 // Stilda and Drift LinOp
@@ -1242,12 +1265,19 @@ void PeleLM::ef_applyPrecond ( const int      &GMRES_ite,
    MLMG mg_diff(pnp_pc_diff);
    MLMG mg_drift(pnp_pc_drift);
    MLMG mg_Stilda(pnp_pc_Stilda);
-   mg_diff.setMaxFmgIter(20);
+   mg_diff.setMaxFmgIter(0);
+//   mg_diff.setBottomSolver(MLMG::BottomSolver::smoother);
+   mg_diff.setPreSmooth(2);
+   mg_diff.setPostSmooth(2);
+   mg_diff.setFinalSmooth(10);
+   mg_diff.setBottomSmooth(40);
    mg_drift.setMaxFmgIter(20);
    mg_Stilda.setMaxFmgIter(20);
    mg_diff.setMaxIter(ef_PoissonMaxIter);
+//   mg_diff.setFixedIter(15);
    mg_drift.setMaxIter(ef_PoissonMaxIter);
    mg_Stilda.setMaxIter(ef_PoissonMaxIter);
+//   mg_Stilda.setFixedIter(15);
    mg_diff.setVerbose(ef_PoissonVerbose);
    mg_drift.setVerbose(ef_PoissonVerbose);
    mg_Stilda.setVerbose(ef_PoissonVerbose);
@@ -1382,6 +1412,49 @@ PeleLM::ef_calcLorentz(const Real      &time,
 #endif
                  lorentzfab.dataPtr(0), ARLIM(lorentzfab.loVect()), ARLIM(lorentzfab.hiVect()));
    }
+}
+
+
+Real
+PeleLM::ef_estTimeStep ()
+{
+   Real ion_estdt = 1.0e20; 
+
+   const Real  cur_time = state[State_Type].curTime();
+   MultiFab&   U_new = get_new_data(State_Type);
+   ef_calc_transport(cur_time);
+   ef_calcUDriftSpec(cur_time);
+//   showMF("pnp",Udrift_spec[0],"pnp_Uxdrift",level,parent->levelSteps(level));
+//   showMF("pnp",Udrift_spec[1],"pnp_Uydrift",level,parent->levelSteps(level));
+
+#ifdef _OPENMP
+#pragma omp parallel if (!system::regtest_reduction) reduction(min:ion_estdt)
+#endif
+   for (MFIter mfi(U_new,true); mfi.isValid(); ++mfi) {
+      Real dt;
+      const Box& box   = mfi.tilebox();
+      const FArrayBox& Ufab = U_new[mfi];
+      const FArrayBox& xUDriftfab = (Udrift_spec[0])[mfi];
+      const FArrayBox& yUDriftfab = (Udrift_spec[1])[mfi];
+#if AMREX_SPACEDIM == 3
+      const FArrayBox& zUDriftfab = (Udrift_spec[2])[mfi];
+#endif
+      ef_minTimeStep(box.loVect(), box.hiVect(),
+                     Ufab.dataPtr(0),      ARLIM(Ufab.loVect()),       ARLIM(Ufab.hiVect()),
+                     xUDriftfab.dataPtr(), ARLIM(xUDriftfab.loVect()), ARLIM(xUDriftfab.hiVect()),
+                     yUDriftfab.dataPtr(), ARLIM(yUDriftfab.loVect()), ARLIM(yUDriftfab.hiVect()),
+#if AMREX_SPACEDIM == 3
+                     zUDriftfab.dataPtr(), ARLIM(zUDriftfab.loVect()), ARLIM(zUDriftfab.hiVect()),
+#endif
+                     geom.CellSize(), &cfl, &dt);
+
+
+      ion_estdt = std::min(ion_estdt,dt);   
+   }
+
+   ParallelDescriptor::ReduceRealMin(ion_estdt);
+
+   return ion_estdt;
 }
 
 void
