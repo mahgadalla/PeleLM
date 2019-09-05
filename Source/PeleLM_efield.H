@@ -69,7 +69,8 @@
    void ef_calcUDriftSpec(const amrex::Real &time);
 
 // Solve PNP function: return updated PhiV and nE
-   void ef_solve_PNP(const amrex::Real      &dt,
+   void ef_solve_PNP(const        int       &misdc,
+                     const amrex::Real      &dt,
                      const amrex::Real      &time, 
                      const amrex::MultiFab  &Dn,
                      const amrex::MultiFab  &Dnp1,
@@ -94,7 +95,8 @@
                        const amrex::Real      &norm_U,
                        const amrex::MultiFab  &U,
                        const amrex::MultiFab  &res,
-                             amrex::MultiFab  &dU);
+                             amrex::MultiFab  &dU,
+                             int              &nGMRES);
 
 // J times v function
    void ef_JtV(const amrex::Real      &dt,
