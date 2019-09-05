@@ -2703,7 +2703,9 @@ PeleLM::post_init (Real stop_time)
 #endif
         Forcing_tmp.setVal(0);
 
+        amrex::Print() << " - Init DivU iter: " << iter << " , dt = " << dt_save[k]/2.0 << "\n"; 
         getLevel(k).advance_chemistry(S_new,S_tmp,dt_save[k]/2.0,Forcing_tmp,0);
+
       }
     }
     //
@@ -5311,7 +5313,7 @@ PeleLM::advance (Real time,
 #ifdef USE_EFIELD
 	 Forcing.setVal(0.0,nspecies+1,1,0);
 	 MultiFab ForcingNe_al(Forcing,amrex::make_alias,nspecies+1,1);
-	 ef_solve_PNP(dt, time, Dn, Dnp1, Dhat, ForcingNe_al);
+	 ef_solve_PNP(sdc_iter, dt, time, Dn, Dnp1, Dhat, ForcingNe_al);
 #endif
 
     //
@@ -5358,9 +5360,6 @@ PeleLM::advance (Real time,
     BL_PROFILE_VAR_STOP(HTREAC);
     showMF("sdc",S_new,"sdc_Snew_after_R",level,sdc_iter,parent->levelSteps(level));
 
-    showMFsub("pnp",Forcing,stripBox,"pnp_Forcing_for_R",sdc_iter,level,parent->levelSteps(level));
-    showMFsub("pnp",S_new,stripBox,"pnp_Snew_SDC",sdc_iter,level,parent->levelSteps(level));
-
     BL_PROFILE_VAR_START(HTDIFF);
     if (floor_species == 1)
     {
@@ -5387,7 +5386,6 @@ PeleLM::advance (Real time,
     setThermoPress(tnp1);
     BL_PROFILE_VAR_STOP(HTMAC);
   }
-  showMFsub("pnp",S_new,stripBox,"pnp_Snew_after_SDC",level,parent->levelSteps(level));
 
   Dn.clear();
   DDn.clear();
