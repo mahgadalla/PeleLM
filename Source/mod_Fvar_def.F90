@@ -58,6 +58,7 @@ module mod_Fvar_def
    REAL_T, DIMENSION(:), ALLOCATABLE :: zk
    REAL_T, DIMENSION(:), ALLOCATABLE :: invmwt
    integer, DIMENSION(:), ALLOCATABLE :: spec_charge
+   integer, dimension(2,3) :: bc_elec_type              ! Electronic type: 0 -> anode, 1 -> cathode
 #endif		
 
   
