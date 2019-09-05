@@ -227,7 +227,6 @@ void PeleLM::ef_solve_phiv(const Real &time) {
 // LinearSolver options
    MLMG mlmg(phiV_poisson);
    mlmg.setMaxIter(ef_PoissonMaxIter);
-   mlmg.setMaxFmgIter(30);
    mlmg.setVerbose(ef_PoissonVerbose);
 // mlmg.setBottomVerbose(bottom_verbose);
 
@@ -263,7 +262,7 @@ void PeleLM::ef_init() {
    PeleLM::ef_PC_MG_tol              = 1.0e-10;
    PeleLM::ef_PoissonMaxIter         = 1000;
    PeleLM::ef_PoissonVerbose         = 1;
-   PeleLM::ef_PoissonMaxOrder        = 4;
+   PeleLM::ef_PoissonMaxOrder        = 1;
    PeleLM::ef_max_NK_ite             = 20;
    PeleLM::ef_lambda_jfnk            = 1.0e-6;
    PeleLM::ef_max_GMRES_rst          = 50;
@@ -284,7 +283,8 @@ void PeleLM::ef_init() {
    pp.query("GMRES_restart_size",ef_GMRES_size);
 }
 
-void PeleLM::ef_solve_PNP(const Real     &dt,
+void PeleLM::ef_solve_PNP(const int      &misdc,   
+                          const Real     &dt,
                           const Real     &time,
                           const MultiFab &Dn,
                           const MultiFab &Dnp1,
@@ -339,7 +339,7 @@ void PeleLM::ef_solve_PNP(const Real     &dt,
    amrex::Print() << " ne scaling: " << pnp_SUne << "\n";
    amrex::Print() << " PhiV scaling: " << pnp_SUphiV << "\n";
    showMF("pnp",pnp_U,"pnp_U0",level);
-// showMFsub("pnp1D",pnp_U,stripBox,"1Dpnp_U0",level);
+   showMFsub("pnp1D",pnp_U,stripBox,"1Dpnp_U0",misdc,level,parent->levelSteps(level));
 
    if ( pnp_SUne <= 0.0 ) {
       ForcingnE.setVal(0.0);
@@ -351,14 +351,14 @@ void PeleLM::ef_solve_PNP(const Real     &dt,
 
    // Compute provisional CD
    ef_bg_chrg(dt, Dn, Dnp1, Dhat);
-// showMFsub("pnp1D",pnp_bgchrg,stripBox,"1Dpnp_BGchrg",level);
+   showMFsub("pnp1D",pnp_bgchrg,stripBox,"1Dpnp_BGchrg",misdc,level,parent->levelSteps(level));
 
    // Pre-Newton stuff
    // first true trigger initalize the residual scaling.
    // second true trigger initalize the preconditioner.
    ef_NL_residual( dt, pnp_U, pnp_res, true, true );
    showMF("pnp",pnp_res,"pnp_res0",level);
-// showMFsub("pnp1D",pnp_res,stripBox,"1Dpnp_res0",level);
+   showMFsub("pnp1D",pnp_res,stripBox,"1Dpnp_res0",misdc,level,parent->levelSteps(level));
    pnp_res.mult(-1.0,0,2);
    const Real norm_NL_res0 = ef_NL_norm(pnp_res);
 
@@ -373,6 +373,8 @@ void PeleLM::ef_solve_PNP(const Real     &dt,
    Real norm_NL_res = norm_NL_res0;
    Real norm_NL_U = norm_NL_U0;
 
+   int GMRES_tot_count = 0;
+
    bool exit_newton = false;
    int NK_ite = 0;
    do {
@@ -382,7 +384,9 @@ void PeleLM::ef_solve_PNP(const Real     &dt,
 
       //    GMRES : PAx = Pb
       //                                    b        x
-      ef_GMRES_solve( dt, norm_NL_U, pnp_U, pnp_res, pnp_dU );
+      int GMRES_count = 0;
+      ef_GMRES_solve( dt, norm_NL_U, pnp_U, pnp_res, pnp_dU, GMRES_count);
+      GMRES_tot_count += GMRES_count;
 
       //    Linesearch
       ef_linesearch( dt, pnp_U, pnp_dU, pnp_res, norm_NL_U, norm_NL_res);
@@ -393,9 +397,9 @@ void PeleLM::ef_solve_PNP(const Real     &dt,
       showMF("pnp",pnp_res,"pnp_resNewt",level,NK_ite);
       showMF("pnp",pnp_U,"pnp_UNewt",level,NK_ite);
       showMF("pnp",pnp_dU,"pnp_dUNewt",level,NK_ite);
-      //showMFsub("pnp1D",pnp_dU,stripBox,"1D_dUNewt",level,NK_ite);
-      //showMFsub("pnp1D",pnp_U,stripBox,"1D_UNewt",level,NK_ite);
-      //showMFsub("pnp1D",pnp_res,stripBox,"1D_resNewt",level,NK_ite);
+      showMFsub("pnp1D",pnp_dU,stripBox,"1D_dUNewt",misdc,NK_ite,parent->levelSteps(level));
+      showMFsub("pnp1D",pnp_U,stripBox,"1D_UNewt",misdc,NK_ite,parent->levelSteps(level));
+      showMFsub("pnp1D",pnp_res,stripBox,"1D_resNewt",misdc,NK_ite,parent->levelSteps(level));
 
 //    if ( NK_ite == 1 ) amrex::Abort("In Newton stop");
    } while( ! exit_newton );
@@ -416,12 +420,14 @@ void PeleLM::ef_solve_PNP(const Real     &dt,
    ForcingnE.plus(pnp_U,0,1,0);
    ForcingnE.mult(1.0/dt,0,1);
    ForcingnE.minus(I_R_e,0,1,0);
-//   showMF("pnp",ForcingnE,"postNewt_ForcingnE",level);
+   showMF("pnp",ForcingnE,"postNewt_ForcingnE",level);
+   showMFsub("pnp",ForcingnE,stripBox,"1Dpnp_ForcingnE",level);
+   showMFsub("pnp",I_R_e,stripBox,"1Dpnp_I_R_nE",level);
+
 
    // Put back the initial order in godunov
    godunov->setSlopeOrder(slope_order);
 
-// amrex::Abort("Post Newton stop");
   if (verbose)
   {
     const int IOProc = ParallelDescriptor::IOProcessorNumber();
@@ -431,9 +437,13 @@ void PeleLM::ef_solve_PNP(const Real     &dt,
     ParallelDescriptor::ReduceRealMin(mn,IOProc);
     ParallelDescriptor::ReduceRealMax(mx,IOProc);
 
+    Real avgGMRES = (float)GMRES_tot_count/(float)NK_ite;
+    amrex::Print() << "Avg GMRES/Newton: " << avgGMRES << "\n";
     amrex::Print() << "PeleLM_efield::pnp_solve(): lev: " << level << ", time: ["
-		   << mn << " ... " << mx << "]\n";
+                   << mn << " ... " << mx << "]\n";
   }
+
+//  amrex::Abort("Post Newton stop");
 
 }
 
@@ -470,11 +480,12 @@ void PeleLM::ef_linesearch(const Real     &dt,
       // Need the initslope
       ef_JtV(dt, norm_U, pnp_U, pnp_res, pnp_dU, pnp_Utmp);    //JtV on dU -> Utmp
       Real initslope = MultiFab::Dot(pnp_Utmp,0,pnp_res,0,2,0);//
-      if (initslope > 0.0)  initslope = -initslope;
+      //if (initslope > 0.0)  initslope = -initslope;
       if (initslope == 0.0) initslope = -1.0;
 
-      amrex::Print() << " Initslope: " << initslope << "\n";
+      //amrex::Print() << " Initslope: " << initslope << "\n";
 
+      Real obj_full_step;
       bool done_linesearch = false;
       Real lambda = 1.0;
       int  ls_its = 0;
@@ -491,11 +502,12 @@ void PeleLM::ef_linesearch(const Real     &dt,
          //showMFsub("pnp1D",pnp_res,stripBox,"1Dpnp_resLS",level);
          norm_LS_res = ef_NL_norm(pnp_res);
          obj_new = 0.5*norm_LS_res*norm_LS_res;
+         if (ls_its == 0) obj_full_step = obj_new;
          sufficient_reduction = obj_old + lambda*alpha*initslope;
          //amrex::Abort("Abort in linesearch");
          if ( obj_new <= sufficient_reduction ) {
             done_linesearch = true;
-            if ( lambda == 1.0 ) amrex::Print() << " Taking full Newton step \n";
+            //if ( lambda == 1.0 ) amrex::Print() << " Taking full Newton step \n";
          } else {
             amrex::Print() << " lambda: " << lambda << " . obj_new: " << obj_new << " .Red: " << sufficient_reduction << "\n";
             if ( lambda == 1.0 ) {
@@ -520,7 +532,15 @@ void PeleLM::ef_linesearch(const Real     &dt,
             lambda = lambdatmp;
          }
          ls_its += 1;
-         if ( ls_its >= max_ls_its ) done_linesearch = true;
+         if ( ls_its >= max_ls_its ) {
+            done_linesearch = true;
+            if ( obj_new > obj_full_step ) {
+               MultiFab::Copy(pnp_Utmp,pnp_dU,0,0,2,0);
+               pnp_Utmp.plus(pnp_U,0,2,Godunov::hypgrow());
+               ef_NL_residual( dt, pnp_Utmp, pnp_res, false, true );
+               pnp_res.mult(-1.0,0,2);
+            }
+         }
          //done_linesearch = true;
       } while (!done_linesearch);
 
@@ -634,6 +654,7 @@ void PeleLM::ef_NL_residual(const Real      &dt,
    pnp_res.mult(1.0/pnp_SFne,0,1);
    pnp_res.mult(1.0/pnp_SFphiV,1,1);
 
+//   amrex::Abort("Abort in Residual");
 // showMF("pnp",pnp_res,"pnp_res",level);
 
 // Update the preconditioner
@@ -687,7 +708,7 @@ void PeleLM::ef_bg_chrg(const Real      &dt,
       const FArrayBox& dnfab = Dn[mfi];
       const FArrayBox& dnp1fab = Dnp1[mfi];
       const FArrayBox& dhatfab = Dhat[mfi];
-      const FArrayBox& rfab = get_old_data(RhoYdot_Type)[mfi];
+      const FArrayBox& rfab = get_new_data(RhoYdot_Type)[mfi];
       FArrayBox& bgchrgfab = pnp_bgchrg[mfi];
       ef_calc_chargedist_prov(box.loVect(), box.hiVect(),
                               rhoYoldfab.dataPtr(first_spec), ARLIM(rhoYoldfab.loVect()), ARLIM(rhoYoldfab.hiVect()),
@@ -797,7 +818,7 @@ void PeleLM::compute_ne_convection_term(const Real      &dt,
       pnp_Ueff[d].mult(-geom.CellSize()[d]);
       pnp_Ueff[d].plus(u_mac[d],0,1,u_mac[d].nGrow());
    }
-   //showMFsub("pnp1D",pnp_Ueff[1],stripBox,"1DUeff_y",level);
+//   showMFsub("pnp1D",pnp_Ueff[1],stripBox,"1DUeff_y",level);
 
    const Real time  = state[State_Type].curTime(); // current time
    MultiFab nE_new(grids,dmap,1,Godunov::hypgrow());
@@ -937,7 +958,8 @@ void PeleLM::ef_GMRES_solve(const Real      &dt,
                             const Real      &norm_pnp_U,
                             const MultiFab  &pnp_U,
                             const MultiFab  &b_in,
-                                  MultiFab  &x0) {
+                                  MultiFab  &x0,
+                                  int       &nGMRES) {
 
 // Initial guess of dU = 0.0
    x0.setVal(0.0);
@@ -982,7 +1004,7 @@ void PeleLM::ef_GMRES_solve(const Real      &dt,
 //    showMF("pnp",r,"pnp_r0norm",level);
 //    showMFsub("pnp1D",b_in,stripBox,"1Dpnp_GMRESb_in",level);
 //    showMFsub("pnp1D",r,stripBox,"1Dpnp_GMRESr0",level);
-//    amrex::Abort("Step debugging");
+      //amrex::Abort("Step debugging");
 
       int k = 0;
       int k_end;
@@ -993,13 +1015,14 @@ void PeleLM::ef_GMRES_solve(const Real      &dt,
 
       for ( int k = 0 ; k < ef_GMRES_size ; ++k ) {      // Inner restarted GMRES loop
 
-//       amrex::Print() << " --> GMRES ite: " << k << "\n";
+//       amrex::Print() << "  [Ite: " << k << " ] -> GMRES residual " << norm_r/beta << "\n";
 
          ef_JtV(dt, norm_pnp_U, pnp_U, b_in, KspBase[k],r);
          ef_applyPrecond(k,r,KspBase[k+1]);
          norm_vec = ef_NL_norm(KspBase[k+1]);
 //       amrex::Print() << " norm of KspBase k bef ortho : " << ef_NL_norm(KspBase[k]) << "\n";
-//       showMF("pnp",KspBase[k+1],"pnp_KspBase_befortho",level,k+1);
+//         showMF("pnp",KspBase[k+1],"pnp_KspBase_befortho",level,k+1);
+//         showMFsub("pnp1D",KspBase[k+1],stripBox,"1Dpnp_KspBase_befortho",level,k+1);
 
 //       Gram-Schmidt ortho.
          for ( int row = 0; row <= k; ++row ) {
@@ -1039,22 +1062,32 @@ void PeleLM::ef_GMRES_solve(const Real      &dt,
          }
 
          norm_Hlast = std::sqrt(H[k][k]*H[k][k] + H[k+1][k]*H[k+1][k]);
+//         if ( norm_Hlast > 0.0 ) {
+////          amrex::Print() << " norm_Hlast: " << norm_Hlast << "\n";
+//            if (  H[k+1][k] == 0.0 ) {
+//               givens[k][0] = 1.0;
+//               givens[k][1] = 0.0;
+//            } else if ( std::abs(H[k+1][k]) > std::abs(H[k][k]) ) {
+//               givens[k][0] =  H[k+1][k] / norm_Hlast;
+//               givens[k][1] = -H[k][k] / norm_Hlast;
+//            } else {
+//               givens[k][0] =  H[k][k] / norm_Hlast;
+//               givens[k][1] = -H[k+1][k] / norm_Hlast;
+//            }
+//            H[k][k] = givens[k][0] * H[k][k] - givens[k][1] * H[k+1][k];
+//            H[k+1][k] = 0.0;
+//            Real v1 = givens[k][0] * g[k]; //- givens[k][1] * g[k+1];
+//            Real v2 = givens[k][1] * g[k]; //+ givens[k][0] * g[k+1];
+//            g[k] = v1;
+//            g[k+1] = v2;
+//         }
          if ( norm_Hlast > 0.0 ) {
-//          amrex::Print() << " norm_Hlast: " << norm_Hlast << "\n";
-            if (  H[k+1][k] == 0.0 ) {
-               givens[k][0] = 1.0;
-               givens[k][1] = 0.0;
-            } else if ( std::abs(H[k+1][k]) > std::abs(H[k][k]) ) {
-               givens[k][0] =  H[k+1][k] / norm_Hlast;
-               givens[k][1] = -H[k][k] / norm_Hlast;
-            } else {
-               givens[k][0] =  H[k][k] / norm_Hlast;
-               givens[k][1] = -H[k+1][k] / norm_Hlast;
-            }
+            givens[k][0] =  H[k][k] / norm_Hlast;
+            givens[k][1] = -H[k+1][k] / norm_Hlast;
             H[k][k] = givens[k][0] * H[k][k] - givens[k][1] * H[k+1][k];
             H[k+1][k] = 0.0;
-            Real v1 = givens[k][0] * g[k]; //- givens[k][1] * g[k+1];
-            Real v2 = givens[k][1] * g[k]; //+ givens[k][0] * g[k+1];
+            Real v1 = givens[k][0] * g[k] - givens[k][1] * g[k+1];
+            Real v2 = givens[k][1] * g[k] + givens[k][0] * g[k+1];
             g[k] = v1;
             g[k+1] = v2;
          }
@@ -1075,14 +1108,14 @@ void PeleLM::ef_GMRES_solve(const Real      &dt,
 
 //    Solve H.y = g
       y[k_end] = g[k_end]/H[k_end][k_end];
-//    amrex::Print() << " y["<<k_end<<"] : " << y[k_end] << "\n";
+      //amrex::Print() << " y["<<k_end<<"] : " << y[k_end] << "\n";
       for ( int k = k_end-1; k >= 0; --k ) {
          Real sum_tmp = 0.0;
          for ( int j = k+1; j <= k_end; ++j ) {
             sum_tmp += H[k][j] * y[j];
          }
          y[k] = ( g[k] - sum_tmp ) / H[k][k];
-//       amrex::Print() << " y["<<k<<"] : " << y[k] << "\n";
+         //amrex::Print() << " y["<<k<<"] : " << y[k]/5.65685424 << "\n";
       }
 
 //    amrex::Print() << " Finished restart GMRES in : " << k_end+1 << " iterations \n";
@@ -1103,6 +1136,7 @@ void PeleLM::ef_GMRES_solve(const Real      &dt,
 //    showMFsub("pnp1D",x0,stripBox,"1Dpnp_xendGMRES",level);
 
       GMRES_restart += 1;
+      nGMRES += k_end; 
 //    amrex::Abort("Step debugging");
 
    } while( ! GMRES_converged && GMRES_restart < ef_max_GMRES_rst );
@@ -1173,7 +1207,7 @@ void PeleLM::ef_setUpPrecond (const Real      &dt,
 //    Scalars includes the scaling of the Jacobian
       pnp_pc_diff.setScalars(-pnp_SUne/pnp_SFne, -dt*pnp_SUne/pnp_SFne, dt*pnp_SUne/pnp_SFne);
       //pnp_pc_diff.setScalars(-1.0, -dt, dt);
-      Real omega = 0.2;
+      Real omega = 1.0;
       pnp_pc_diff.setRelaxation(omega);
 //    Diagonal part
       MultiFab dummy(grids,dmap,1,1);
