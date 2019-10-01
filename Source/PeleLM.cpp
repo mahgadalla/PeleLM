@@ -895,7 +895,7 @@ PeleLM::Initialize_specific ()
     } 
 
     PeleLM::closed_chamber            = 1;
-    if (flag_closed_chamber = true){
+    if (flag_closed_chamber == true){
       PeleLM::closed_chamber            = 0;
     }
 
@@ -1617,12 +1617,12 @@ PeleLM::restart (Amr&          papa,
       Vector<char> fileCharPtr;
       ParallelDescriptor::ReadAndBcastFile(File, fileCharPtr);
       std::string fileCharPtrString(fileCharPtr.dataPtr());
-      std::istringstream is(fileCharPtrString, std::istringstream::in);
+      std::istringstream is1(fileCharPtrString, std::istringstream::in);
 
       // read in title line
-      std::getline(is, line);
+      std::getline(is1, line);
 
-      is >> p_amb_old;
+      is1 >> p_amb_old;
       p_amb_new = p_amb_old;
   }
 }
@@ -5589,7 +5589,7 @@ PeleLM::advance_chemistry (MultiFab&       mf_old,
       const Box&       bx       = Smfi.tilebox();
       FArrayBox&       fc       = fcnCntTemp[Smfi];
       const FArrayBox& frc      = FTemp[Smfi];
-      FArrayBox*       chemDiag = (do_diag ? &(diagTemp[Smfi]) : 0);
+      //FArrayBox*       chemDiag = (do_diag ? &(diagTemp[Smfi]) : 0);
 
       // FORTRAN WAY OF CALLING DVODE IN PP
       //BoxArray ba = do_avg_down_chem ? amrex::complementIn(bx,cf_grids) : BoxArray(bx);
@@ -5605,7 +5605,6 @@ PeleLM::advance_chemistry (MultiFab&       mf_old,
       
       Real dt_incr = dt;
       Real time_init = 0;
-      int reInit = 1;
       double pressure = 1.0; // dummy FIXME
 
       const auto len = amrex::length(bx);

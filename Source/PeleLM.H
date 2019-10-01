@@ -97,8 +97,8 @@ public:
 protected:
   LMEF lmef;
   LMEF_BOX lmef_box;
-  amrex::Real value, min_time, max_time;
   amrex::RealBox box;
+  amrex::Real value, min_time, max_time;
   int max_level;
 };
 

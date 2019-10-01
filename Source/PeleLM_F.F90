@@ -192,7 +192,7 @@ end subroutine plm_extern_init
 
     use network, only : nreactions
     implicit none
-    integer Nelt,Nspec,NR,Nfit
+    integer NR
 
     NR = nreactions
 
@@ -379,8 +379,10 @@ end subroutine plm_extern_init
     !REAL_T vslope,
     integer ierr
     REAL_T r1,r2,r3,r4,r5,r6,r7
-    REAL_T alpha,xsmb,vpmax,exp1 
-    REAL_T rhs1,rhs2,vt_tay,vtt_tay,velintegral,sest_test
+#if 0
+    REAL_T alpha,xsmb,vpmax,exp1,sest_test
+#endif
+    REAL_T rhs1,rhs2,vt_tay,vtt_tay,velintegral
     integer i1
     integer nfilled,ifill
     logical found_it
