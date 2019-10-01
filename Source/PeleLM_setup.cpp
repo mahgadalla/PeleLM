@@ -42,6 +42,8 @@
 
 #ifdef AMREX_USE_SUNDIALS_3x4x 
 #include <actual_Creactor.h>
+#else
+#include <actual_reactor.H>
 #endif
 
 using namespace amrex;
@@ -447,7 +449,7 @@ PeleLM::variableSetUp ()
 #ifdef _OPENMP
 #pragma omp parallel
 #endif  
-  reactor_init(&cvode_iE,&cvode_ncells);
+  pphys_reactor_init();
 
   init_transport(use_tranlib);
 

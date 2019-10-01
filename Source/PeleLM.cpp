@@ -36,8 +36,10 @@
 #include <AMReX_AmrData.H>
 #endif
 
-#ifdef AMREX_USE_SUNDIALS_3x4x 
+#ifdef AMREX_USE_SUNDIALS_3x4x
 #include <actual_Creactor.h>
+#else
+#include <actual_reactor.H>
 #endif
 
 #include <Prob_F.H>
@@ -5617,6 +5619,11 @@ PeleLM::advance_chemistry (MultiFab&       mf_old,
       double tmp_src_vect[nspecies];
       double tmp_vect_energy[1];
       double tmp_src_vect_energy[1];
+
+      double cpy_vect[(nspecies+1)];
+      double cpy_src_vect[nspecies];
+      double cpy_vect_energy[1];
+      double cpy_src_vect_energy[1];
       for         (int k = 0; k < len.z; ++k) {
           for         (int j = 0; j < len.y; ++j) {
               for         (int i = 0; i < len.x; ++i) {
@@ -5624,30 +5631,44 @@ PeleLM::advance_chemistry (MultiFab&       mf_old,
                   for (int sp=0;sp<nspecies; sp++){
                       tmp_vect[sp]       = rhoY(i,j,k,sp) * 1.e-3;
 		      tmp_src_vect[sp]   = frcing(i,j,k,sp) * 1.e-3;
+                      cpy_vect[sp]       = rhoY(i,j,k,sp) * 1.e-3;
+		      cpy_src_vect[sp]   = frcing(i,j,k,sp) * 1.e-3;
                   }    
 		  tmp_vect[nspecies]     = rhoY(i,j,k,nspecies+2);
 		  tmp_vect_energy[0]     = rhoY(i,j,k,nspecies) * 10.0;
 		  tmp_src_vect_energy[0] = frcing(i,j,k,nspecies) * 10.0;
+		  cpy_vect[nspecies]     = rhoY(i,j,k,nspecies+2);
+		  cpy_vect_energy[0]     = rhoY(i,j,k,nspecies) * 10.0;
+		  cpy_src_vect_energy[0] = frcing(i,j,k,nspecies) * 10.0;
                   fcl(i,j,k) = react(tmp_vect, tmp_src_vect,
 				  tmp_vect_energy, tmp_src_vect_energy,
-				  &pressure, &dt_incr, &time_init, &reInit);
+				  &pressure, &dt_incr, &time_init, &i, &j, &k);
 
 		  dt_incr = dt;
+		  bool has_nans = false;
 		  for (int sp=0;sp<nspecies; sp++){
 	              rhoY(i,j,k,sp)      = tmp_vect[sp] * 1.e+3;
-                      if (rhoY(i,j,k,sp) != rhoY(i,j,k,sp)) {
-                          amrex::Abort("NaNs !! ");
-                      }
+                      if (rhoY(i,j,k,sp) != rhoY(i,j,k,sp)) has_nans=true;
 		  }
-		  rhoY(i,j,k,nspecies+2)  = tmp_vect[nspecies]; 
-                  if (rhoY(i,j,k,nspecies+2) != rhoY(i,j,k,nspecies+2)) {
-                      amrex::Abort("NaNs !! ");
-                  }
-	          rhoY(i,j,k,nspecies) = tmp_vect_energy[0] * 1.e-01;
-                  if (rhoY(i,j,k,nspecies) != rhoY(i,j,k,nspecies)) {
-                      amrex::Abort("NaNs !! ");
-                  }
 
+		  rhoY(i,j,k,nspecies+2)  = tmp_vect[nspecies]; 
+                  if (rhoY(i,j,k,nspecies+2) != rhoY(i,j,k,nspecies+2)) has_nans=true;
+
+	          rhoY(i,j,k,nspecies) = tmp_vect_energy[0] * 1.e-01;
+                  if (rhoY(i,j,k,nspecies) != rhoY(i,j,k,nspecies)) has_nans=true;
+
+		  if (has_nans) {
+                      Print() << "Failure at i,j,k: " << lo.x+i << ", " << lo.y+j << ", " << lo.z+k << std::endl;
+                      Print() << "RhoY: ";
+                      for (int n=0; n<nspecies+1; ++n) Print() << cpy_vect[n] << " ";
+                      Print();
+                      Print() << "energy: " << cpy_vect_energy[0] << std::endl;
+                      Print() << "RhoY src: ";
+                      for (int n=0; n<nspecies+1; ++n) Print() << cpy_src_vect[n] << " ";
+                      Print();
+                      Print() << "energy src: " << cpy_src_vect_energy[0] << std::endl;
+                      amrex::Abort("NaNs !! ");
+                  }
               }
           }
       }

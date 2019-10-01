@@ -255,6 +255,20 @@ end subroutine plm_extern_init
       
   end subroutine pphys_calc_src_sdc
 
+  subroutine pphys_reactor_init() bind(C,name="pphys_reactor_init")
+
+    use reactor_module, only : enth_masH_ID, reactor_init, reac_verbose
+
+    implicit none
+
+    integer :: ncells = 1
+    integer :: iE = enth_masH_ID
+
+    reac_verbose = 1
+    call reactor_init(iE, ncells)
+
+  end subroutine pphys_reactor_init
+
 !------------------------------------  
 
   subroutine set_scal_numb(DensityIn, TempIn, TracIn, RhoHIn, &
