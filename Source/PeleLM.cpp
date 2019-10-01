@@ -37,7 +37,6 @@
 #endif
 
 #ifdef AMREX_USE_SUNDIALS_3x4x
-#ifdef USE_SUNDIALS_PP
 #include <actual_Creactor.h>
 #else
 #include <actual_reactor.H>
