@@ -190,6 +190,7 @@ contains
                               bind(C, name="enth_diff_terms")
 
     use network,        only : nspecies
+    use amrex_mempool_module
 
     implicit none
 
@@ -217,7 +218,7 @@ contains
     integer DIMDEC(FiGHi)
     REAL_T  FiGHi(DIMV(FiGHi))
 
-    REAL_T, allocatable :: H(:,:,:)
+    REAL_T, pointer, dimension(:,:,:) :: H, AD
 
     integer i, j, d, n
     integer lob(dim), hib(dim)
@@ -225,7 +226,7 @@ contains
     REAL_T AyDyInv_lo, AyDyInv_hi, dyInv
     logical fix_xlo, fix_xhi, fix_ylo, fix_yhi
 
-    REAL_T, allocatable :: rhoInv(:,:)
+    REAL_T, pointer, dimension(:,:) :: rhoInv
     REAL_T gradY
 
     fix_xlo = .false.
@@ -243,7 +244,7 @@ contains
 !     Note that any cells on a physical boundary with Dirichlet conditions will 
 !     actually be centered on the edge, so the stencils below must reflect this
 
-    allocate( H(DIMV(T),1:nspecies) )
+    call amrex_allocate(H,T_l1,T_h1,T_l2,T_h2,1,nspecies)
 
     call pphys_HfromT(lob, hib, H, DIMS(T), T, DIMS(T))
 
@@ -370,7 +371,7 @@ contains
     Fx(lo(1):hi(1)+1,lo(2):hi(2),nspecies+2) = 0.d0
     Fy(lo(1):hi(1),lo(2):hi(2)+1,nspecies+2) = 0.d0
 
-    allocate(rhoInv(lo(1)-1:hi(1)+1,lo(2)-1:hi(2)+1))
+    call amrex_allocate(rhoInv,lo(1)-1,hi(1)+1,lo(2)-1,hi(2)+1)
 
     rhoInv = 0
     do n=1,nspecies
@@ -450,7 +451,7 @@ contains
         enddo
       enddo
     endif
-    deallocate(rhoInv)
+    call amrex_deallocate(rhoInv)
 #endif
 
 !     Set FiGHi = (species flux) dot Grad(species enthalpy)
@@ -458,192 +459,99 @@ contains
 !        Fi is extensive here, so need to remove area.  Also, assume that we are 
 !        away from domain boundary, fix afterward
 !
+
+
+    !
+    ! Use AD to cut down on some divides.
+    ! Unfortunately it ups memory usage a bit.
+    !
+    call amrex_allocate(AD,1,4,lo(1),hi(1),lo(2),hi(2))
+
     do j=lo(2),hi(2)
-      do i=lo(1),hi(1)
-        FiGHi(i,j) = 0.d0
-      enddo
+    do i=lo(1),hi(1)
+       AD(1,i,j) = merge(0.d0,1.d0/(Ax(i  ,j)*dx(1)),Ax(i  ,j).eq.0.d0)
+       AD(2,i,j) = merge(0.d0,1.d0/(Ax(i+1,j)*dx(1)),Ax(i+1,j).eq.0.d0)
+       AD(3,i,j) = 1.d0/(Ay(i,j  )*dx(2))
+       AD(4,i,j) = 1.d0/(Ay(i,j+1)*dx(2))
     enddo
+    enddo
+    
+    FiGHi(lo(1):hi(1),lo(2):hi(2)) = 0.d0
+
     do n=1,nspecies
-      do j=lo(2),hi(2)
-        do i=lo(1),hi(1)
-          if (Ax(i,j).eq.0.d0) then
-            AxDxInv_lo = 0.d0
-          else
-            AxDxInv_lo = 1.d0/(Ax(i,j)*dx(1))
-          endif
-          if (Ax(i+1,j).eq.0.d0) then
-            AxDxInv_hi = 0.d0
-          else
-            AxDxInv_hi = 1.d0/(Ax(i+1,j)*dx(1))
-          endif
-          if (Ay(i,j).eq.0.d0) then
-            AyDyInv_lo = 0.d0
-          else
-            AyDyInv_lo = 1.d0/(Ay(i,j)*dx(2))
-          endif
-          if (Ay(i,j+1).eq.0.d0) then
-            AyDyInv_hi = 0.d0
-          else
-            AyDyInv_hi = 1.d0/(Ay(i,j+1)*dx(2))
-          endif
-               FiGHi(i,j) = FiGHi(i,j) - 0.5d0*  &
-                  ( ( H(i+1,j,n) - H(i,j,n) )*Fx(i+1,j,n)*AxDxInv_hi &
-                  + ( H(i,j,n) - H(i-1,j,n) )*Fx(i  ,j,n)*AxDxInv_lo &
-                  + ( H(i,j+1,n) - H(i,j,n) )*Fy(i,j+1,n)*AyDyInv_hi &
-                  + ( H(i,j,n) - H(i,j-1,n) )*Fy(i  ,j,n)*AyDyInv_lo )
-        enddo
-      enddo
+    do j=lo(2),hi(2)
+    do i=lo(1),hi(1)
+       FiGHi(i,j) = FiGHi(i,j) - 0.5d0*  &
+            ( ( H(i+1,j,n) - H(i,j,n) )*Fx(i+1,j,n)*AD(2,i,j) &
+            + ( H(i,j,n) - H(i-1,j,n) )*Fx(i  ,j,n)*AD(1,i,j) &
+            + ( H(i,j+1,n) - H(i,j,n) )*Fy(i,j+1,n)*AD(4,i,j) &
+            + ( H(i,j,n) - H(i,j-1,n) )*Fy(i  ,j,n)*AD(3,i,j) )
+    enddo
+    enddo
     enddo
 
 !     xlo
     if (fix_xlo) then
       i = lo(1)
-      do j=lo(2),hi(2)
-        FiGHi(i,j) = 0.d0
-      enddo
+      FiGHi(i,lo(2):hi(2)) = 0.d0
       do n=1,nspecies
-        do j=lo(2),hi(2)
-          if (Ax(i,j).eq.0.d0) then
-            AxDxInv_lo = 0.d0
-          else
-            AxDxInv_lo = 2.d0/(Ax(i,j)*dx(1))
-          endif
-          if (Ax(i+1,j).eq.0.d0) then
-            AxDxInv_hi = 0.d0
-          else
-            AxDxInv_hi = 1.d0/(Ax(i+1,j)*dx(1))
-          endif
-          if (Ay(i,j).eq.0.d0) then
-            AyDyInv_lo = 0.d0
-          else
-            AyDyInv_lo = 1.d0/(Ay(i,j)*dx(2))
-          endif
-          if (Ay(i,j+1).eq.0.d0) then
-            AyDyInv_hi = 0.d0
-          else
-            AyDyInv_hi = 1.d0/(Ay(i,j+1)*dx(2))
-          endif
-               FiGHi(i,j) = FiGHi(i,j) - 0.5d0*  &
-                   ( ( H(i+1,j,n) - H(i,j,n) )*Fx(i+1,j,n)*AxDxInv_hi  &
-                   + ( H(i,j,n) - H(i-1,j,n) )*Fx(i  ,j,n)*AxDxInv_lo  &
-                   + ( H(i,j+1,n) - H(i,j,n) )*Fy(i,j+1,n)*AyDyInv_hi  &
-                   + ( H(i,j,n) - H(i,j-1,n) )*Fy(i  ,j,n)*AyDyInv_lo )
-        enddo
+      do j=lo(2),hi(2)
+         FiGHi(i,j) = FiGHi(i,j) - 0.5d0*  &
+              ( ( H(i+1,j,n) - H(i,j,n) )*Fx(i+1,j,n)*AD(2,i,j)     &
+              + ( H(i,j,n) - H(i-1,j,n) )*Fx(i  ,j,n)*AD(1,i,j)*2.d0&
+              + ( H(i,j+1,n) - H(i,j,n) )*Fy(i,j+1,n)*AD(4,i,j)     &
+              + ( H(i,j,n) - H(i,j-1,n) )*Fy(i  ,j,n)*AD(3,i,j)     )
+      enddo
       enddo
     endif
 
 !     xhi
     if (fix_xhi) then
       i = hi(1)
-      do j=lo(2),hi(2)
-        FiGHi(hi(1),j) = 0.d0
-      enddo
+      FiGHi(i,lo(2):hi(2)) = 0.d0
       do n=1,nspecies
-        do j=lo(2),hi(2)
-          if (Ax(i,j).eq.0.d0) then
-            AxDxInv_lo = 0.d0
-          else
-            AxDxInv_lo = 1.d0/(Ax(i,j)*dx(1))
-          endif
-          if (Ax(i+1,j).eq.0.d0) then
-            AxDxInv_hi = 0.d0
-          else
-            AxDxInv_hi = 2.d0/(Ax(i+1,j)*dx(1))
-          endif
-          if (Ay(i,j).eq.0.d0) then
-            AyDyInv_lo = 0.d0
-          else
-            AyDyInv_lo = 1.d0/(Ay(i,j)*dx(2))
-          endif
-          if (Ay(i,j+1).eq.0.d0) then
-            AyDyInv_hi = 0.d0
-          else
-            AyDyInv_hi = 1.d0/(Ay(i,j+1)*dx(2))
-          endif
-               FiGHi(i,j) = FiGHi(i,j) - 0.5d0*  &
-                   ( ( H(i+1,j,n) - H(i,j,n) )*Fx(i+1,j,n)*AxDxInv_hi &
-                   + ( H(i,j,n) - H(i-1,j,n) )*Fx(i  ,j,n)*AxDxInv_lo &
-                   + ( H(i,j+1,n) - H(i,j,n) )*Fy(i,j+1,n)*AyDyInv_hi &
-                   + ( H(i,j,n) - H(i,j-1,n) )*Fy(i  ,j,n)*AyDyInv_lo )
-        enddo
+      do j=lo(2),hi(2)
+         FiGHi(i,j) = FiGHi(i,j) - 0.5d0*  &
+              ( ( H(i+1,j,n) - H(i,j,n) )*Fx(i+1,j,n)*AD(2,i,j)*2.d0&
+              + ( H(i,j,n) - H(i-1,j,n) )*Fx(i  ,j,n)*AD(1,i,j)     &
+              + ( H(i,j+1,n) - H(i,j,n) )*Fy(i,j+1,n)*AD(4,i,j)     &
+              + ( H(i,j,n) - H(i,j-1,n) )*Fy(i  ,j,n)*AD(3,i,j)     )
+      enddo
       enddo
     endif
 
 !     ylo
     if (fix_ylo) then
       j = lo(2)
-        do i=lo(1),hi(1)
-          FiGHi(i,j) = 0.d0
-        enddo
-        do n=1,nspecies
-          do i=lo(1),hi(1)
-            if (Ax(i,j).eq.0.d0) then
-              AxDxInv_lo = 0.d0
-            else
-              AxDxInv_lo = 1.d0/(Ax(i,j)*dx(1))
-            endif
-            if (Ax(i+1,j).eq.0.d0) then
-              AxDxInv_hi = 0.d0
-            else
-              AxDxInv_hi = 1.d0/(Ax(i+1,j)*dx(1))
-            endif
-            if (Ay(i,j).eq.0.d0) then
-              AyDyInv_lo = 0.d0
-            else
-              AyDyInv_lo = 2.d0/(Ay(i,j)*dx(2))
-            endif
-            if (Ay(i,j+1).eq.0.d0) then
-              AyDyInv_hi = 0.d0
-            else
-              AyDyInv_hi = 1.d0/(Ay(i,j+1)*dx(2))
-            endif
-            FiGHi(i,j) = FiGHi(i,j) - 0.5d0* &
-                   ( ( H(i+1,j,n) - H(i,j,n) )*Fx(i+1,j,n)*AxDxInv_hi &
-                   + ( H(i,j,n) - H(i-1,j,n) )*Fx(i  ,j,n)*AxDxInv_lo &
-                   + ( H(i,j+1,n) - H(i,j,n) )*Fy(i,j+1,n)*AyDyInv_hi &
-                   + ( H(i,j,n) - H(i,j-1,n) )*Fy(i  ,j,n)*AyDyInv_lo )
+      FiGHi(lo(1):hi(1),j) = 0.d0
+      do n=1,nspecies
+      do i=lo(1),hi(1)
+         FiGHi(i,j) = FiGHi(i,j) - 0.5d0* &
+              ( ( H(i+1,j,n) - H(i,j,n) )*Fx(i+1,j,n)*AD(2,i,j)     &
+              + ( H(i,j,n) - H(i-1,j,n) )*Fx(i  ,j,n)*AD(1,i,j)     &
+              + ( H(i,j+1,n) - H(i,j,n) )*Fy(i,j+1,n)*AD(4,i,j)     &
+              + ( H(i,j,n) - H(i,j-1,n) )*Fy(i  ,j,n)*AD(3,i,j)*2.d0)
       enddo
-    enddo
-  endif
+      enddo
+    endif
 
 !     yhi
     if (fix_yhi) then
       j = hi(2)
-      do i=lo(1),hi(1)
-        FiGHi(i,j) = 0.d0
-      enddo
+      FiGHi(lo(1):hi(1),j) = 0.d0
       do n=1,nspecies
-        do i=lo(1),hi(1)
-          if (Ax(i,j).eq.0.d0) then
-            AxDxInv_lo = 0.d0
-          else
-            AxDxInv_lo = 1.d0/(Ax(i,j)*dx(1))
-          endif
-          if (Ax(i+1,j).eq.0.d0) then
-            AxDxInv_hi = 0.d0
-          else
-            AxDxInv_hi = 1.d0/(Ax(i+1,j)*dx(1))
-          endif
-          if (Ay(i,j).eq.0.d0) then
-            AyDyInv_lo = 0.d0
-          else
-            AyDyInv_lo = 1.d0/(Ay(i,j)*dx(2))
-          endif
-          if (Ay(i,j+1).eq.0.d0) then
-            AyDyInv_hi = 0.d0
-          else
-            AyDyInv_hi = 2.d0/(Ay(i,j+1)*dx(2))
-          endif
-          FiGHi(i,j) = FiGHi(i,j) - 0.5d0* &
-                   ( ( H(i+1,j,n) - H(i,j,n) )*Fx(i+1,j,n)*AxDxInv_hi &
-                   + ( H(i,j,n) - H(i-1,j,n) )*Fx(i  ,j,n)*AxDxInv_lo &
-                   + ( H(i,j+1,n) - H(i,j,n) )*Fy(i,j+1,n)*AyDyInv_hi &
-                   + ( H(i,j,n) - H(i,j-1,n) )*Fy(i  ,j,n)*AyDyInv_lo )
-        enddo
+      do i=lo(1),hi(1)
+         FiGHi(i,j) = FiGHi(i,j) - 0.5d0* &
+              ( ( H(i+1,j,n) - H(i,j,n) )*Fx(i+1,j,n)*AD(2,i,j)     &
+              + ( H(i,j,n) - H(i-1,j,n) )*Fx(i  ,j,n)*AD(1,i,j)     &
+              + ( H(i,j+1,n) - H(i,j,n) )*Fy(i,j+1,n)*AD(4,i,j)*2.d0&
+              + ( H(i,j,n) - H(i,j-1,n) )*Fy(i  ,j,n)*AD(3,i,j)     )
+      enddo
       enddo
     endif
 
-     deallocate(H)
+    call amrex_deallocate(AD)
+    call amrex_deallocate(H)
 
   end subroutine enth_diff_terms
 

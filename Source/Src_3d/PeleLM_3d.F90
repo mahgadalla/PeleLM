@@ -189,6 +189,7 @@ contains
                               bind(C, name="enth_diff_terms")
 
       use network,        only : nspecies
+      use amrex_mempool_module
 
       implicit none
 
@@ -223,7 +224,7 @@ contains
       integer DIMDEC(FiGHi)
       REAL_T  FiGHi(DIMV(FiGHi))
 
-      REAL_T, allocatable :: H(:,:,:,:), AD(:,:,:,:)
+      REAL_T, pointer, dimension(:,:,:,:) :: H, AD
 
       integer i, j, k, d, n
       integer lob(dim), hib(dim)
@@ -232,7 +233,7 @@ contains
       REAL_T AzDzInv_lo, AzDzInv_hi, dzInv
       logical fix_xlo, fix_xhi, fix_ylo, fix_yhi, fix_zlo, fix_zhi
 
-      REAL_T, allocatable :: rhoInv(:,:,:)
+      REAL_T, pointer, dimension(:,:,:) :: rhoInv
       REAL_T gradY
 
       fix_xlo = .false.
@@ -252,7 +253,7 @@ contains
 !     Note that any cells on a physical boundary with Dirichlet conditions will 
 !     actually be centered on the edge, so the stencils below must reflect this
 
-      allocate( H(DIMV(T),1:nspecies) )
+      call amrex_allocate(H,T_l1,T_h1,T_l2,T_h2,T_l3,T_h3,1,nspecies)
 
       call pphys_HfromT(lob, hib, H, DIMS(T), T, DIMS(T))
 
@@ -352,7 +353,7 @@ contains
       Fy(lo(1):hi(1),lo(2):hi(2)+1,lo(3):hi(3),nspecies+2) = 0.d0
       Fz(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)+1,nspecies+2) = 0.d0
 
-      allocate(rhoInv(lo(1)-1:hi(1)+1,lo(2)-1:hi(2)+1,lo(3)-1:hi(3)+1))
+      call amrex_allocate(rhoInv,lo(1)-1,hi(1)+1,lo(2)-1,hi(2)+1,lo(3)-1,hi(3)+1)
 
       rhoInv = 0.0d0
       do n=1,nspecies
@@ -487,7 +488,7 @@ contains
             enddo
          enddo
       endif
-      deallocate(rhoInv)
+      call amrex_deallocate(rhoInv)
 
 
 !     Set FiGHi = (species flux) dot Grad(species enthalpy)
@@ -502,23 +503,22 @@ contains
       ! Use AD to cut down on some divides.
       ! Unfortunately it ups memory usage a bit.
       !
-      allocate(AD(6,lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
+      call amrex_allocate(AD,1,6,lo(1),hi(1),lo(2),hi(2),lo(3),hi(3))
 
       do k=lo(3),hi(3)
       do j=lo(2),hi(2)
       do i=lo(1),hi(1)
-         AD(1,i,j,k) = 1.d0/(Ax(i,j,k)*dx(1))
+         AD(1,i,j,k) = 1.d0/(Ax(i  ,j,k)*dx(1))
          AD(2,i,j,k) = 1.d0/(Ax(i+1,j,k)*dx(1))
-         AD(3,i,j,k) = 1.d0/(Ay(i,j,k)*dx(2))
+         AD(3,i,j,k) = 1.d0/(Ay(i,j  ,k)*dx(2))
          AD(4,i,j,k) = 1.d0/(Ay(i,j+1,k)*dx(2))
-         AD(5,i,j,k) = 1.d0/(Az(i,j,k)*dx(3))
+         AD(5,i,j,k) = 1.d0/(Az(i,j,k  )*dx(3))
          AD(6,i,j,k) = 1.d0/(Az(i,j,k+1)*dx(3))
       enddo
       enddo
       enddo
 
       FiGHi(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = 0.0D0
-
 
       do n=1,nspecies
       do k=lo(3),hi(3)
@@ -536,32 +536,20 @@ contains
       enddo
       enddo
 
-      deallocate(AD)
-
 !     xlo
       if (fix_xlo) then
          i = lo(1)
-         do k=lo(3),hi(3)
-         do j=lo(2),hi(2)
-            FiGHi(i,j,k) = 0.d0
-         enddo
-         enddo
+         FiGHi(i,lo(2):hi(2),lo(3):hi(3)) = 0.d0
          do n=1,nspecies
          do k=lo(3),hi(3)
          do j=lo(2),hi(2)
-            AxDxInv_lo = 2.d0/(Ax(i,j,k)*dx(1))
-            AxDxInv_hi = 1.d0/(Ax(i+1,j,k)*dx(1))
-            AyDyInv_lo = 1.d0/(Ay(i,j,k)*dx(2))
-            AyDyInv_hi = 1.d0/(Ay(i,j+1,k)*dx(2))
-            AzDzInv_lo = 1.d0/(Az(i,j,k)*dx(3))
-            AzDzInv_hi = 1.d0/(Az(i,j,k+1)*dx(3))
             FiGHi(i,j,k) = FiGHi(i,j,k) - 0.5d0* &
-                ( ( H(i+1,j,k,n) - H(i,j,k,n) )*Fx(i+1,j  ,k  ,n)*AxDxInv_hi &
-                + ( H(i,j,k,n) - H(i-1,j,k,n) )*Fx(i  ,j  ,k  ,n)*AxDxInv_lo &
-                + ( H(i,j+1,k,n) - H(i,j,k,n) )*Fy(i  ,j+1,k  ,n)*AyDyInv_hi &
-                + ( H(i,j,k,n) - H(i,j-1,k,n) )*Fy(i  ,j  ,k  ,n)*AyDyInv_lo &
-                + ( H(i,j,k+1,n) - H(i,j,k,n) )*Fz(i  ,j  ,k+1,n)*AzDzInv_hi &
-                + ( H(i,j,k,n) - H(i,j,k-1,n) )*Fz(i  ,j  ,k  ,n)*AzDzInv_lo )
+                ( ( H(i+1,j,k,n) - H(i,j,k,n) )*Fx(i+1,j  ,k  ,n)*AD(2,i,j,k)     &
+                + ( H(i,j,k,n) - H(i-1,j,k,n) )*Fx(i  ,j  ,k  ,n)*AD(1,i,j,k)*2.d0&
+                + ( H(i,j+1,k,n) - H(i,j,k,n) )*Fy(i  ,j+1,k  ,n)*AD(4,i,j,k)     &
+                + ( H(i,j,k,n) - H(i,j-1,k,n) )*Fy(i  ,j  ,k  ,n)*AD(3,i,j,k)     &
+                + ( H(i,j,k+1,n) - H(i,j,k,n) )*Fz(i  ,j  ,k+1,n)*AD(6,i,j,k)     &
+                + ( H(i,j,k,n) - H(i,j,k-1,n) )*Fz(i  ,j  ,k  ,n)*AD(5,i,j,k)     )
          enddo
          enddo
          enddo
@@ -570,27 +558,17 @@ contains
 !     xhi
       if (fix_xhi) then
          i = hi(1)
-         do k=lo(3),hi(3)
-         do j=lo(2),hi(2)
-            FiGHi(i,j,k) = 0.d0
-         enddo
-         enddo
+         FiGHi(i,lo(2):hi(2),lo(3):hi(3)) = 0.d0
          do n=1,nspecies
          do k=lo(3),hi(3)
          do j=lo(2),hi(2)
-            AxDxInv_lo = 2.d0/(Ax(i,j,k)*dx(1))
-            AxDxInv_hi = 1.d0/(Ax(i+1,j,k)*dx(1))
-            AyDyInv_lo = 1.d0/(Ay(i,j,k)*dx(2))
-            AyDyInv_hi = 1.d0/(Ay(i,j+1,k)*dx(2))
-            AzDzInv_lo = 1.d0/(Az(i,j,k)*dx(3))
-            AzDzInv_hi = 1.d0/(Az(i,j,k+1)*dx(3))
             FiGHi(i,j,k) = FiGHi(i,j,k) - 0.5d0* &
-                ( ( H(i+1,j,k,n) - H(i,j,k,n) )*Fx(i+1,j  ,k  ,n)*AxDxInv_hi &
-                + ( H(i,j,k,n) - H(i-1,j,k,n) )*Fx(i  ,j  ,k  ,n)*AxDxInv_lo &
-                + ( H(i,j+1,k,n) - H(i,j,k,n) )*Fy(i  ,j+1,k  ,n)*AyDyInv_hi &
-                + ( H(i,j,k,n) - H(i,j-1,k,n) )*Fy(i  ,j  ,k  ,n)*AyDyInv_lo & 
-                + ( H(i,j,k+1,n) - H(i,j,k,n) )*Fz(i  ,j  ,k+1,n)*AzDzInv_hi &
-                + ( H(i,j,k,n) - H(i,j,k-1,n) )*Fz(i  ,j  ,k  ,n)*AzDzInv_lo )
+                ( ( H(i+1,j,k,n) - H(i,j,k,n) )*Fx(i+1,j  ,k  ,n)*AD(2,i,j,k)*2.d0&
+                + ( H(i,j,k,n) - H(i-1,j,k,n) )*Fx(i  ,j  ,k  ,n)*AD(1,i,j,k)     &
+                + ( H(i,j+1,k,n) - H(i,j,k,n) )*Fy(i  ,j+1,k  ,n)*AD(4,i,j,k)     &
+                + ( H(i,j,k,n) - H(i,j-1,k,n) )*Fy(i  ,j  ,k  ,n)*AD(3,i,j,k)     & 
+                + ( H(i,j,k+1,n) - H(i,j,k,n) )*Fz(i  ,j  ,k+1,n)*AD(6,i,j,k)     &
+                + ( H(i,j,k,n) - H(i,j,k-1,n) )*Fz(i  ,j  ,k  ,n)*AD(5,i,j,k)     )
          enddo
          enddo
          enddo
@@ -599,27 +577,17 @@ contains
 !     ylo
       if (fix_ylo) then
          j = lo(2)
-         do k=lo(3),hi(3)
-         do i=lo(1),hi(1)
-            FiGHi(i,j,k) = 0.d0
-         enddo
-         enddo
+         FiGHi(lo(1):hi(1),j,lo(3):hi(3)) = 0.d0
          do n=1,nspecies
          do k=lo(3),hi(3)
          do i=lo(1),hi(1)
-            AxDxInv_lo = 2.d0/(Ax(i,j,k)*dx(1))
-            AxDxInv_hi = 1.d0/(Ax(i+1,j,k)*dx(1))
-            AyDyInv_lo = 1.d0/(Ay(i,j,k)*dx(2))
-            AyDyInv_hi = 1.d0/(Ay(i,j+1,k)*dx(2))
-            AzDzInv_lo = 1.d0/(Az(i,j,k)*dx(3))
-            AzDzInv_hi = 1.d0/(Az(i,j,k+1)*dx(3))
             FiGHi(i,j,k) = FiGHi(i,j,k) - 0.5d0* &
-                ( ( H(i+1,j,k,n) - H(i,j,k,n) )*Fx(i+1,j  ,k  ,n)*AxDxInv_hi &
-                + ( H(i,j,k,n) - H(i-1,j,k,n) )*Fx(i  ,j  ,k  ,n)*AxDxInv_lo &
-                + ( H(i,j+1,k,n) - H(i,j,k,n) )*Fy(i  ,j+1,k  ,n)*AyDyInv_hi &
-                + ( H(i,j,k,n) - H(i,j-1,k,n) )*Fy(i  ,j  ,k  ,n)*AyDyInv_lo &
-                + ( H(i,j,k+1,n) - H(i,j,k,n) )*Fz(i  ,j  ,k+1,n)*AzDzInv_hi &
-                + ( H(i,j,k,n) - H(i,j,k-1,n) )*Fz(i  ,j  ,k  ,n)*AzDzInv_lo )
+                ( ( H(i+1,j,k,n) - H(i,j,k,n) )*Fx(i+1,j  ,k  ,n)*AD(2,i,j,k)     &
+                + ( H(i,j,k,n) - H(i-1,j,k,n) )*Fx(i  ,j  ,k  ,n)*AD(1,i,j,k)     &
+                + ( H(i,j+1,k,n) - H(i,j,k,n) )*Fy(i  ,j+1,k  ,n)*AD(4,i,j,k)     &
+                + ( H(i,j,k,n) - H(i,j-1,k,n) )*Fy(i  ,j  ,k  ,n)*AD(3,i,j,k)*2.d0&
+                + ( H(i,j,k+1,n) - H(i,j,k,n) )*Fz(i  ,j  ,k+1,n)*AD(6,i,j,k)     &
+                + ( H(i,j,k,n) - H(i,j,k-1,n) )*Fz(i  ,j  ,k  ,n)*AD(5,i,j,k)     )
          enddo
          enddo
          enddo
@@ -628,27 +596,17 @@ contains
 !     yhi
       if (fix_yhi) then
          j = hi(2)
-         do k=lo(3),hi(3)
-         do i=lo(1),hi(1)
-            FiGHi(i,j,k) = 0.d0
-         enddo
-         enddo
+         FiGHi(lo(1):hi(1),j,lo(3):hi(3)) = 0.d0
          do n=1,nspecies
          do k=lo(3),hi(3)
          do i=lo(1),hi(1)
-            AxDxInv_lo = 2.d0/(Ax(i,j,k)*dx(1))
-            AxDxInv_hi = 1.d0/(Ax(i+1,j,k)*dx(1))
-            AyDyInv_lo = 1.d0/(Ay(i,j,k)*dx(2))
-            AyDyInv_hi = 1.d0/(Ay(i,j+1,k)*dx(2))
-            AzDzInv_lo = 1.d0/(Az(i,j,k)*dx(3))
-            AzDzInv_hi = 1.d0/(Az(i,j,k+1)*dx(3))
             FiGHi(i,j,k) = FiGHi(i,j,k) - 0.5d0* &
-                ( ( H(i+1,j,k,n) - H(i,j,k,n) )*Fx(i+1,j  ,k  ,n)*AxDxInv_hi &
-                + ( H(i,j,k,n) - H(i-1,j,k,n) )*Fx(i  ,j  ,k  ,n)*AxDxInv_lo &
-                + ( H(i,j+1,k,n) - H(i,j,k,n) )*Fy(i  ,j+1,k  ,n)*AyDyInv_hi &
-                + ( H(i,j,k,n) - H(i,j-1,k,n) )*Fy(i  ,j  ,k  ,n)*AyDyInv_lo &
-                + ( H(i,j,k+1,n) - H(i,j,k,n) )*Fz(i  ,j  ,k+1,n)*AzDzInv_hi &
-                + ( H(i,j,k,n) - H(i,j,k-1,n) )*Fz(i  ,j  ,k  ,n)*AzDzInv_lo )
+                ( ( H(i+1,j,k,n) - H(i,j,k,n) )*Fx(i+1,j  ,k  ,n)*AD(2,i,j,k)     &
+                + ( H(i,j,k,n) - H(i-1,j,k,n) )*Fx(i  ,j  ,k  ,n)*AD(1,i,j,k)     &
+                + ( H(i,j+1,k,n) - H(i,j,k,n) )*Fy(i  ,j+1,k  ,n)*AD(4,i,j,k)*2.d0&
+                + ( H(i,j,k,n) - H(i,j-1,k,n) )*Fy(i  ,j  ,k  ,n)*AD(3,i,j,k)     &
+                + ( H(i,j,k+1,n) - H(i,j,k,n) )*Fz(i  ,j  ,k+1,n)*AD(6,i,j,k)     &
+                + ( H(i,j,k,n) - H(i,j,k-1,n) )*Fz(i  ,j  ,k  ,n)*AD(5,i,j,k)     )
          enddo
          enddo
          enddo
@@ -657,27 +615,17 @@ contains
 !     zlo
       if (fix_zlo) then
          k = lo(3)
-         do j=lo(2),hi(2)
-         do i=lo(1),hi(1)
-            FiGHi(i,j,k) = 0.d0
-         enddo
-         enddo
+         FiGHi(lo(1):hi(1),lo(2):hi(2),k) = 0.d0
          do n=1,nspecies
          do j=lo(2),hi(2)
          do i=lo(1),hi(1)
-            AxDxInv_lo = 2.d0/(Ax(i,j,k)*dx(1))
-            AxDxInv_hi = 1.d0/(Ax(i+1,j,k)*dx(1))
-            AyDyInv_lo = 1.d0/(Ay(i,j,k)*dx(2))
-            AyDyInv_hi = 1.d0/(Ay(i,j+1,k)*dx(2))
-            AzDzInv_lo = 1.d0/(Az(i,j,k)*dx(3))
-            AzDzInv_hi = 1.d0/(Az(i,j,k+1)*dx(3))
             FiGHi(i,j,k) = FiGHi(i,j,k) - 0.5d0* &
-                ( ( H(i+1,j,k,n) - H(i,j,k,n) )*Fx(i+1,j  ,k  ,n)*AxDxInv_hi &
-                + ( H(i,j,k,n) - H(i-1,j,k,n) )*Fx(i  ,j  ,k  ,n)*AxDxInv_lo &
-                + ( H(i,j+1,k,n) - H(i,j,k,n) )*Fy(i  ,j+1,k  ,n)*AyDyInv_hi &
-                + ( H(i,j,k,n) - H(i,j-1,k,n) )*Fy(i  ,j  ,k  ,n)*AyDyInv_lo & 
-                + ( H(i,j,k+1,n) - H(i,j,k,n) )*Fz(i  ,j  ,k+1,n)*AzDzInv_hi &
-                + ( H(i,j,k,n) - H(i,j,k-1,n) )*Fz(i  ,j  ,k  ,n)*AzDzInv_lo )
+                ( ( H(i+1,j,k,n) - H(i,j,k,n) )*Fx(i+1,j  ,k  ,n)*AD(2,i,j,k)     &
+                + ( H(i,j,k,n) - H(i-1,j,k,n) )*Fx(i  ,j  ,k  ,n)*AD(1,i,j,k)     &
+                + ( H(i,j+1,k,n) - H(i,j,k,n) )*Fy(i  ,j+1,k  ,n)*AD(4,i,j,k)     &
+                + ( H(i,j,k,n) - H(i,j-1,k,n) )*Fy(i  ,j  ,k  ,n)*AD(3,i,j,k)     & 
+                + ( H(i,j,k+1,n) - H(i,j,k,n) )*Fz(i  ,j  ,k+1,n)*AD(6,i,j,k)     &
+                + ( H(i,j,k,n) - H(i,j,k-1,n) )*Fz(i  ,j  ,k  ,n)*AD(5,i,j,k)*2.d0)
          enddo
          enddo
          enddo
@@ -686,33 +634,24 @@ contains
 !     zhi
       if (fix_zhi) then
          k = hi(3)
-         do j=lo(2),hi(2)
-         do i=lo(1),hi(1)
-            FiGHi(i,j,k) = 0.d0
-         enddo
-         enddo
+         FiGHi(lo(1):hi(1),lo(2):hi(2),k) = 0.d0
          do n=1,nspecies
          do j=lo(2),hi(2)
          do i=lo(1),hi(1)
-            AxDxInv_lo = 2.d0/(Ax(i,j,k)*dx(1))
-            AxDxInv_hi = 1.d0/(Ax(i+1,j,k)*dx(1))
-            AyDyInv_lo = 1.d0/(Ay(i,j,k)*dx(2))
-            AyDyInv_hi = 1.d0/(Ay(i,j+1,k)*dx(2))
-            AzDzInv_lo = 1.d0/(Az(i,j,k)*dx(3))
-            AzDzInv_hi = 1.d0/(Az(i,j,k+1)*dx(3))
             FiGHi(i,j,k) = FiGHi(i,j,k) - 0.5d0* &
-                ( ( H(i+1,j,k,n) - H(i,j,k,n) )*Fx(i+1,j  ,k  ,n)*AxDxInv_hi &
-                + ( H(i,j,k,n) - H(i-1,j,k,n) )*Fx(i  ,j  ,k  ,n)*AxDxInv_lo &
-                + ( H(i,j+1,k,n) - H(i,j,k,n) )*Fy(i  ,j+1,k  ,n)*AyDyInv_hi &
-                + ( H(i,j,k,n) - H(i,j-1,k,n) )*Fy(i  ,j  ,k  ,n)*AyDyInv_lo &
-                + ( H(i,j,k+1,n) - H(i,j,k,n) )*Fz(i  ,j  ,k+1,n)*AzDzInv_hi &
-                + ( H(i,j,k,n) - H(i,j,k-1,n) )*Fz(i  ,j  ,k  ,n)*AzDzInv_lo )
+                ( ( H(i+1,j,k,n) - H(i,j,k,n) )*Fx(i+1,j  ,k  ,n)*AD(2,i,j,k)     &
+                + ( H(i,j,k,n) - H(i-1,j,k,n) )*Fx(i  ,j  ,k  ,n)*AD(1,i,j,k)     &
+                + ( H(i,j+1,k,n) - H(i,j,k,n) )*Fy(i  ,j+1,k  ,n)*AD(4,i,j,k)     &
+                + ( H(i,j,k,n) - H(i,j-1,k,n) )*Fy(i  ,j  ,k  ,n)*AD(3,i,j,k)     &
+                + ( H(i,j,k+1,n) - H(i,j,k,n) )*Fz(i  ,j  ,k+1,n)*AD(6,i,j,k)*2.d0&
+                + ( H(i,j,k,n) - H(i,j,k-1,n) )*Fz(i  ,j  ,k  ,n)*AD(5,i,j,k)     )
          enddo
          enddo
          enddo
       endif
 
-      deallocate(H)
+      call amrex_deallocate(AD)
+      call amrex_deallocate(H)
  
   end subroutine enth_diff_terms
 
