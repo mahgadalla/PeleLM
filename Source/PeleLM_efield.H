@@ -9,6 +9,11 @@
    static int         have_nE;
    static int         have_PhiV;
 
+   static amrex::Vector<int>          spec_charges;
+   static amrex::BCRec                phiV_bc;
+   static amrex::Vector<std::string>  phiV_lo_pol;
+   static amrex::Vector<std::string>  phiV_hi_pol;
+
 // Iterative solver options
    static int                  ef_PoissonMaxIter;
    static int                  ef_PoissonVerbose;
@@ -180,6 +185,9 @@
                                   int              sCompT,
                                   int              sCompnE,
                                   int              sCompRhoYdot) const;
+
+// Fill the species charges vector
+   static void getSpeciesCharges(amrex::Vector<int>& spec_chrg);
 
 // Compute the Lorentz forces used in the momemtum eq.
    void ef_calcLorentz(const amrex::Real       &time,

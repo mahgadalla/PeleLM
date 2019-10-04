@@ -192,6 +192,10 @@ int  PeleLM::iE_sp;
 int  PeleLM::PhiV;
 int  PeleLM::have_nE;
 int  PeleLM::have_PhiV;
+BCRec  PeleLM::phiV_bc;
+Vector<std::string>  PeleLM::phiV_lo_pol(AMREX_SPACEDIM);
+Vector<std::string>  PeleLM::phiV_hi_pol(AMREX_SPACEDIM);
+Vector<int>  PeleLM::spec_charges;
 Real PeleLM::ef_phiV_tol;
 int  PeleLM::ef_PoissonMaxIter;
 int  PeleLM::ef_PoissonVerbose;
@@ -5375,6 +5379,7 @@ PeleLM::advance (Real time,
 #ifdef USE_EFIELD      
         floor_nE(box.loVect(), box.hiVect(), species.dataPtr(nE),
                  ARLIM(species.loVect()), ARLIM(species.hiVect()));
+        S_new.setVal(0.0,box,first_spec+iE_sp,1,0);
 #endif
       }
     }
@@ -8694,7 +8699,7 @@ PeleLM::errorEst (TagBoxArray& tags,
         const int*  dlo     = fab.box().loVect();
         const int*  dhi     = fab.box().hiVect();
         const int   ncomp   = fab.nComp();
-        
+
         if (lmfunc==0) 
         {
           err_list[j].errFunc()(tptr, ARLIM(tlo), ARLIM(thi), &tagval,
@@ -8710,7 +8715,7 @@ PeleLM::errorEst (TagBoxArray& tags,
                            dx, xlo, prob_lo, &time, &level);
         }
       }
-                      
+
       tags[mfi].tags(itags);
 
     }
