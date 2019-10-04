@@ -56,6 +56,8 @@
                           const amrex::Real* T,    ARLIM_P(Tlo),       ARLIM_P(Thi),
                           amrex::Real*    RhoYdot, ARLIM_P(RhoYdotlo), ARLIM_P(RhoYdothi) );
 
+  int pphys_get_spec_chrg(int* ispec);
+
   void floor_nE(const int* lo,  const int* hi,
                 const amrex::Real* nE_ar,   ARLIM_P(nElo),    ARLIM_P(nEhi));
 

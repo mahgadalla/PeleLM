@@ -817,9 +817,9 @@ end subroutine plm_extern_init
 #ifdef USE_EFIELD      
 !##############################
 !   A few allocs for efield
-    ALLOCATE(zk(1:Nspec))
-    ALLOCATE(invmwt(1:Nspec))
-    ALLOCATE(spec_charge(1:Nspec))
+    ALLOCATE(zk(1:nspec))
+    ALLOCATE(invmwt(1:nspec))
+    ALLOCATE(spec_charge(1:nspec))
 
 !   Compute const variables    
     CALL CKCHRG(spec_charge(1))
@@ -853,6 +853,20 @@ end subroutine plm_extern_init
      scaling = e0*er/CperECharge
 
   end subroutine getScalingLap
+
+  integer function pphys_get_spec_chrg(ispec)bind(C, name="pphys_get_spec_chrg")
+
+     use mod_Fvar_def, only: spec_charge
+
+     implicit none
+
+     integer :: ispec
+
+     pphys_get_spec_chrg = spec_charge(ispec+1)
+
+     return
+
+  end function pphys_get_spec_chrg
 #endif      
 
 end module PeleLM_F
