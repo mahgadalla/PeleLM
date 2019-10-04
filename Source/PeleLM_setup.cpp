@@ -310,11 +310,12 @@ ne_bc[] =
 {
   INT_DIR, EXT_DIR, FOEXTRAP, REFLECT_EVEN, REFLECT_EVEN, EXT_DIR, EXT_DIR
 };
+// PhiV bc : 0 = Interior = INT_DIR, 1 = Dirichlet = EXT_DIR, 2 = Neumann = REFLECT_EVEN,
 static
 int
 phiv_bc[] =
 {
-  INT_DIR, EXT_DIR, EXT_DIR, REFLECT_EVEN, REFLECT_EVEN, EXT_DIR, EXT_DIR
+  INT_DIR, EXT_DIR, REFLECT_EVEN
 };
 
 void
@@ -588,6 +589,10 @@ PeleLM::variableSetUp ()
 		  			 &iE_sp,
 #endif		  
                 &bathID, &fuelID, &oxidID, &prodID, &nspecies,flag_active_control);
+
+#ifdef USE_EFIELD  
+  getSpeciesCharges(spec_charges);
+#endif
   //
   // Get a species to use as a flame tracker.
   //
@@ -700,7 +705,7 @@ PeleLM::variableSetUp ()
     set_ne_bc(bc,phys_bc);
     desc_lst.setComponent(State_Type,nE,"nE",bc,BndryFunc(ne_fill));
 
-    set_phiv_bc(bc,phys_bc);
+    set_phiv_bc(bc,phiV_bc);
     desc_lst.setComponent(State_Type,PhiV,"PhiV",bc,BndryFunc(phiv_fill));
 #endif
 
