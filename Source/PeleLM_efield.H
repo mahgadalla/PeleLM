@@ -189,6 +189,9 @@
 // Fill the species charges vector
    static void getSpeciesCharges(amrex::Vector<int>& spec_chrg);
 
+   static amrex::BCRec hack_bc_charged_spec(const int &chrg,
+                                            const amrex::BCRec &bc_in);
+
 // Compute the Lorentz forces used in the momemtum eq.
    void ef_calcLorentz(const amrex::Real       &time,
                              amrex::MultiFab   &lorentz);
