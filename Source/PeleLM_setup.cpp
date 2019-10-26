@@ -668,12 +668,17 @@ PeleLM::variableSetUp ()
   for (int i = 0; i < nspecies; i++)
   {
     bcs[i]  = bc;
+#ifdef USE_EFIELD
+    if ( spec_charges[i] != 0 ) { 
+       bcs[i]  = hack_bc_charged_spec(spec_charges[i],bc);
+    }
+#endif
     name[i] = "rho.Y(" + spec_names[i] + ")";
 
     desc_lst.setComponent(State_Type,
                           first_spec+i,
                           name[i].c_str(),
-                          bc,
+                          bcs[i],
                           ChemBndryFunc(chem_fill,spec_names[i]),
                           &cell_cons_interp);
           
