@@ -1,3 +1,116 @@
+void PeleLM::ef_define_data() {
+   kappaSpec_cc.define(grids,dmap,nspecies,1);
+   kappaElec_cc.define(grids,dmap,1,1);
+   diffElec_cc.define(grids,dmap,1,1);
+   kappaElec_ec = 0;
+   diffElec_ec  = 0;
+
+   grad_phiV_old = new MultiFab[AMREX_SPACEDIM];
+   for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+      const BoxArray& edgeba = getEdgeBoxArray(d);
+      grad_phiV_old[d].define(edgeba,dmap, 1,0);
+   }
+
+   pnp_dU.define(grids,dmap,2,1);
+   pnp_bgchrg.define(grids,dmap,1,1);
+   pnp_gdnv.define(grids,dmap,1,1);
+   ne_old.define(grids,dmap,1,1);
+   phiV_old.define(grids,dmap,1,1);
+   pnp_refGC.define(grids,dmap,2,Godunov::hypgrow());
+
+   pnp_Ueff = new MultiFab[AMREX_SPACEDIM];
+   for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+      const BoxArray& edgeba = getEdgeBoxArray(d);
+      pnp_Ueff[d].define(edgeba,dmap, 1,1);
+      pnp_Ueff[d].setVal(1.e40);
+   }
+
+   Udrift_spec = new MultiFab[AMREX_SPACEDIM];
+   for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+      const BoxArray& edgeba = getEdgeBoxArray(d);
+      Udrift_spec[d].define(edgeba,dmap, nspecies+1,1);
+      Udrift_spec[d].setVal(0.0);
+   }
+
+   pnp_SFne = 1.0;
+   pnp_SFphiV = 1.0;
+   pnp_SUne = 1.0;
+   pnp_SUphiV = 1.0;
+}
+
+void PeleLM::ef_init() {
+   amrex::Print() << " Init EFIELD solve options \n" << "\n";
+
+   PeleLM::nE                        = -1;
+   PeleLM::PhiV                      = -1;
+   PeleLM::have_nE                   = 0;
+   PeleLM::have_PhiV                 = 0;
+   PeleLM::ef_phiV_tol               = 1.0e-7;
+   PeleLM::ef_PC_MG_tol              = 1.0e-10;
+   PeleLM::ef_PoissonMaxIter         = 1000;
+   PeleLM::ef_PoissonVerbose         = 1;
+   PeleLM::ef_PoissonMaxOrder        = 1;
+   PeleLM::ef_max_NK_ite             = 20;
+   PeleLM::ef_lambda_jfnk            = 1.0e-6;
+   PeleLM::ef_max_GMRES_rst          = 50;
+   PeleLM::ef_GMRES_reltol           = 1.0e-10;
+   PeleLM::ef_GMRES_size             = 20;
+
+   ParmParse pp("ef");
+
+   // Get the phiV bc
+   Vector<std::string> lo_bc(AMREX_SPACEDIM);
+   Vector<std::string> hi_bc(AMREX_SPACEDIM);
+   pp.getarr("phiV_lo_bc",lo_bc,0,AMREX_SPACEDIM);
+   pp.getarr("phiV_hi_bc",hi_bc,0,AMREX_SPACEDIM);
+   for (int i = 0; i < AMREX_SPACEDIM; i++) 
+   {    
+       if (!lo_bc[i].compare("Interior")){
+          phiV_bc.setLo(i,0);
+       } else if (!lo_bc[i].compare("Dirichlet")) { 
+          phiV_bc.setLo(i,1);
+       } else if (!lo_bc[i].compare("Neumann")) { 
+          phiV_bc.setLo(i,2);
+       } else {
+          amrex::Abort("Wrong PhiV bc. Should be : Interior, Dirichlet or Neumann");
+       }
+       if (!hi_bc[i].compare("Interior")){
+          phiV_bc.setHi(i,0);
+       } else if (!hi_bc[i].compare("Dirichlet")) { 
+          phiV_bc.setHi(i,1);
+       } else if (!hi_bc[i].compare("Neumann")) { 
+          phiV_bc.setHi(i,2);
+       } else {
+          amrex::Abort("Wrong PhiV bc. Should be : Interior, Dirichlet or Neumann");
+       }
+   }    
+
+   pp.getarr("phiV_polarity_lo",phiV_lo_pol,0,AMREX_SPACEDIM);
+   pp.getarr("phiV_polarity_hi",phiV_hi_pol,0,AMREX_SPACEDIM);
+   for (int i = 0; i < AMREX_SPACEDIM; i++) {
+       // Check that Cathode and Anode are Dirichlet
+       if (!phiV_lo_pol[i].compare("Cathode") ||
+           !phiV_lo_pol[i].compare("Anode")    ) {
+          BL_ASSERT(phiV_bc.lo(i)==1);
+       }
+       if (!phiV_hi_pol[i].compare("Cathode") ||
+           !phiV_hi_pol[i].compare("Anode")    ) {
+          BL_ASSERT(phiV_bc.hi(i)==1);
+       }
+   }    
+
+   pp.query("MG_itermax",ef_PoissonMaxIter);
+   pp.query("MG_verbose",ef_PoissonVerbose);
+   pp.query("MG_maxorder",ef_PoissonMaxOrder);
+   pp.query("MG_PhiV_tol",ef_phiV_tol);
+   pp.query("PC_MG_tol",ef_PC_MG_tol);
+   pp.query("JFNK_lambda",ef_lambda_jfnk);
+   pp.query("JFNK_maxNewton",ef_max_NK_ite);
+   pp.query("GMRES_max_restart",ef_max_GMRES_rst);
+   pp.query("GMRES_rel_tol",ef_GMRES_reltol);
+   pp.query("GMRES_restart_size",ef_GMRES_size);
+}
+
 void PeleLM::ef_advance_setup(const Real &time) {
 
    // Solve for phiV_time and get gradPhiV_tn
@@ -123,49 +236,11 @@ void PeleLM::ef_calcUDriftSpec(const Real &time) {
    //amrex::Abort("In Udrift_spec");
 }
 
-void PeleLM::ef_define_data() {
-   kappaSpec_cc.define(grids,dmap,nspecies,1);
-   kappaElec_cc.define(grids,dmap,1,1);
-   diffElec_cc.define(grids,dmap,1,1);
-   kappaElec_ec = 0;
-   diffElec_ec  = 0;
-
-   grad_phiV_old = new MultiFab[AMREX_SPACEDIM];
-   for (int d = 0; d < AMREX_SPACEDIM; ++d) {
-      const BoxArray& edgeba = getEdgeBoxArray(d);
-      grad_phiV_old[d].define(edgeba,dmap, 1,0);
-   }
-
-   pnp_dU.define(grids,dmap,2,1);
-   pnp_bgchrg.define(grids,dmap,1,1);
-   pnp_gdnv.define(grids,dmap,1,1);
-   ne_old.define(grids,dmap,1,1);
-   phiV_old.define(grids,dmap,1,1);
-   pnp_refGC.define(grids,dmap,2,Godunov::hypgrow());
-
-   pnp_Ueff = new MultiFab[AMREX_SPACEDIM];
-   for (int d = 0; d < AMREX_SPACEDIM; ++d) {
-      const BoxArray& edgeba = getEdgeBoxArray(d);
-      pnp_Ueff[d].define(edgeba,dmap, 1,1);
-      pnp_Ueff[d].setVal(1.e40);
-   }
-
-   Udrift_spec = new MultiFab[AMREX_SPACEDIM];
-   for (int d = 0; d < AMREX_SPACEDIM; ++d) {
-      const BoxArray& edgeba = getEdgeBoxArray(d);
-      Udrift_spec[d].define(edgeba,dmap, nspecies+1,1);
-      Udrift_spec[d].setVal(0.0);
-   }
-
-   pnp_SFne = 1.0;
-   pnp_SFphiV = 1.0;
-   pnp_SUne = 1.0;
-   pnp_SUphiV = 1.0;
-}
-
 void PeleLM::ef_solve_phiv(const Real &time) {
 
-   MultiFab& S = get_new_data(State_Type);
+   amrex::Print() << " Solve for electro-static field \n";
+
+   MultiFab& S = (time == state[State_Type].prevTime() ) ? get_old_data(State_Type) : get_new_data(State_Type);
    MultiFab rhs_poisson(grids,dmap,1,1);
 
 // Get the coarse level data
@@ -202,7 +277,7 @@ void PeleLM::ef_solve_phiv(const Real &time) {
 
 // Set-up solver tolerances
    const Real S_tol     = ef_phiV_tol;
-   const Real S_tol_abs = rhs_poisson.norm0() * ef_phiV_tol;
+   const Real S_tol_abs = std::max(rhs_poisson.norm0(),PhiV_alias.norm0()) * ef_phiV_tol;
 
 // Set-up Poisson solver
    LPInfo info;
@@ -231,7 +306,7 @@ void PeleLM::ef_solve_phiv(const Real &time) {
 // mlmg.setBottomVerbose(bottom_verbose);
 
 // Actual solve
-   PhiV_alias.mult(0.9);
+   PhiV_alias.mult(0.99,0,1,0);
    mlmg.solve({&PhiV_alias}, {&rhs_poisson}, S_tol, S_tol_abs);
 
 //* Need the "fluxes" to get the gradient.
@@ -249,38 +324,6 @@ void PeleLM::ef_solve_phiv(const Real &time) {
 // TODO: the FillBoundary() only works on single level. Will have to to something else for AMR.
 //       For now crash if more than one level.
    BL_ASSERT(level==0);
-}
-
-void PeleLM::ef_init() {
-   amrex::Print() << " Init EFIELD solve options \n" << "\n";
-
-   PeleLM::nE                        = -1;
-   PeleLM::PhiV                      = -1;
-   PeleLM::have_nE                   = 0;
-   PeleLM::have_PhiV                 = 0;
-   PeleLM::ef_phiV_tol               = 1.0e-7;
-   PeleLM::ef_PC_MG_tol              = 1.0e-10;
-   PeleLM::ef_PoissonMaxIter         = 1000;
-   PeleLM::ef_PoissonVerbose         = 1;
-   PeleLM::ef_PoissonMaxOrder        = 1;
-   PeleLM::ef_max_NK_ite             = 20;
-   PeleLM::ef_lambda_jfnk            = 1.0e-6;
-   PeleLM::ef_max_GMRES_rst          = 50;
-   PeleLM::ef_GMRES_reltol           = 1.0e-10;
-   PeleLM::ef_GMRES_size             = 20;
-
-   ParmParse pp("ef");
-
-   pp.query("MG_itermax",ef_PoissonMaxIter);
-   pp.query("MG_verbose",ef_PoissonVerbose);
-   pp.query("MG_maxorder",ef_PoissonMaxOrder);
-   pp.query("MG_PhiV_tol",ef_phiV_tol);
-   pp.query("PC_MG_tol",ef_PC_MG_tol);
-   pp.query("JFNK_lambda",ef_lambda_jfnk);
-   pp.query("JFNK_maxNewton",ef_max_NK_ite);
-   pp.query("GMRES_max_restart",ef_max_GMRES_rst);
-   pp.query("GMRES_rel_tol",ef_GMRES_reltol);
-   pp.query("GMRES_restart_size",ef_GMRES_size);
 }
 
 void PeleLM::ef_solve_PNP(const int      &misdc,   
@@ -332,13 +375,13 @@ void PeleLM::ef_solve_PNP(const int      &misdc,
    MultiFab::Copy(pnp_U, pnp_refGC, 0, 0, 2, Godunov::hypgrow());
 
    // Get the NL vector scaling and scale
-   pnp_SUne = (pnp_U.norm0(0) > 0.0) ? pnp_U.norm0(0) : 1.0;
+   pnp_SUne = (pnp_U.norm0(0) > 1.0e-12) ? pnp_U.norm0(0) : 1.0;
    pnp_SUphiV = (pnp_U.norm0(1) > 1.0e-6 ) ? pnp_U.norm0(1) : 1.0;
    pnp_U.mult(1.0/pnp_SUne,0,1);
    pnp_U.mult(1.0/pnp_SUphiV,1,1);
    amrex::Print() << " ne scaling: " << pnp_SUne << "\n";
    amrex::Print() << " PhiV scaling: " << pnp_SUphiV << "\n";
-   showMF("pnp",pnp_U,"pnp_U0",level);
+   showMF("pnp",pnp_U,"pnp_U0",misdc,level,parent->levelSteps(level));
    showMFsub("pnp1D",pnp_U,stripBox,"1Dpnp_U0",misdc,level,parent->levelSteps(level));
 
    if ( pnp_SUne <= 0.0 ) {
@@ -352,12 +395,13 @@ void PeleLM::ef_solve_PNP(const int      &misdc,
    // Compute provisional CD
    ef_bg_chrg(dt, Dn, Dnp1, Dhat);
    showMFsub("pnp1D",pnp_bgchrg,stripBox,"1Dpnp_BGchrg",misdc,level,parent->levelSteps(level));
+   showMF("pnp",pnp_bgchrg,"pnp_BGchrg",misdc,level,parent->levelSteps(level));
 
    // Pre-Newton stuff
    // first true trigger initalize the residual scaling.
    // second true trigger initalize the preconditioner.
    ef_NL_residual( dt, pnp_U, pnp_res, true, true );
-   showMF("pnp",pnp_res,"pnp_res0",level);
+   showMF("pnp",pnp_res,"pnp_res0",misdc,level,parent->levelSteps(level));
    showMFsub("pnp1D",pnp_res,stripBox,"1Dpnp_res0",misdc,level,parent->levelSteps(level));
    pnp_res.mult(-1.0,0,2);
    const Real norm_NL_res0 = ef_NL_norm(pnp_res);
@@ -380,13 +424,17 @@ void PeleLM::ef_solve_PNP(const int      &misdc,
    do {
 
       NK_ite += 1;
-      amrex::Print() << " Newton it: " << NK_ite << " residual: " << 0.5*norm_NL_res*norm_NL_res << "\n";
+      amrex::Print() << " Newton it: " << NK_ite << " residual: " << 0.5*norm_NL_res*norm_NL_res;
 
       //    GMRES : PAx = Pb
       //                                    b        x
       int GMRES_count = 0;
       ef_GMRES_solve( dt, norm_NL_U, pnp_U, pnp_res, pnp_dU, GMRES_count);
       GMRES_tot_count += GMRES_count;
+      amrex::Print() << ". GMRES it: " << GMRES_count << "\n";
+
+      showMF("pnp",pnp_dU,"pnp_dUNewt",misdc,NK_ite,parent->levelSteps(level));
+      showMFsub("pnp1D",pnp_res,stripBox,"1D_resNewt",misdc,NK_ite,parent->levelSteps(level));
 
       //    Linesearch
       ef_linesearch( dt, pnp_U, pnp_dU, pnp_res, norm_NL_U, norm_NL_res);
@@ -394,12 +442,10 @@ void PeleLM::ef_solve_PNP(const int      &misdc,
       //    Test exit conditions
       test_exit_newton(pnp_res, NK_ite, norm_NL_res0, norm_NL_res, exit_newton);
 
-      showMF("pnp",pnp_res,"pnp_resNewt",level,NK_ite);
-      showMF("pnp",pnp_U,"pnp_UNewt",level,NK_ite);
-      showMF("pnp",pnp_dU,"pnp_dUNewt",level,NK_ite);
       showMFsub("pnp1D",pnp_dU,stripBox,"1D_dUNewt",misdc,NK_ite,parent->levelSteps(level));
       showMFsub("pnp1D",pnp_U,stripBox,"1D_UNewt",misdc,NK_ite,parent->levelSteps(level));
-      showMFsub("pnp1D",pnp_res,stripBox,"1D_resNewt",misdc,NK_ite,parent->levelSteps(level));
+      showMF("pnp",pnp_res,"pnp_resNewt",misdc,NK_ite,parent->levelSteps(level));
+      showMF("pnp",pnp_U,"pnp_UNewt",misdc,NK_ite,parent->levelSteps(level));
 
 //    if ( NK_ite == 1 ) amrex::Abort("In Newton stop");
    } while( ! exit_newton );
@@ -420,7 +466,7 @@ void PeleLM::ef_solve_PNP(const int      &misdc,
    ForcingnE.plus(pnp_U,0,1,0);
    ForcingnE.mult(1.0/dt,0,1);
    ForcingnE.minus(I_R_e,0,1,0);
-   showMF("pnp",ForcingnE,"postNewt_ForcingnE",level);
+   showMF("pnp",ForcingnE,"postNewt_ForcingnE",misdc,level,parent->levelSteps(level));
    showMFsub("pnp",ForcingnE,stripBox,"1Dpnp_ForcingnE",level);
    showMFsub("pnp",I_R_e,stripBox,"1Dpnp_I_R_nE",level);
 
@@ -465,7 +511,7 @@ void PeleLM::ef_linesearch(const Real     &dt,
       Real alpha = 0.0001;
       Real lambdared_min = 0.1;
       Real lambdared_max = 0.5;
-      int  max_ls_its = 15;
+      int  max_ls_its = 10;
 
       MultiFab pnp_Utmp(grids,dmap,2,Godunov::hypgrow());
       pnp_Utmp.setVal(0.0);
@@ -494,6 +540,7 @@ void PeleLM::ef_linesearch(const Real     &dt,
          //showMFsub("pnp1D",pnp_U,stripBox,"1Dpnp_ULS",level);
          //showMFsub("pnp1D",pnp_dU,stripBox,"1Dpnp_dULS",level);
          //showMFsub("pnp1D",pnp_Utmp,stripBox,"1Dpnp_UtmpLS",level);
+         pnp_Utmp.setVal(0.0);
          MultiFab::Copy(pnp_Utmp,pnp_dU,0,0,2,0);
          pnp_Utmp.mult(lambda,0,2);
          pnp_Utmp.plus(pnp_U,0,2,Godunov::hypgrow());
@@ -533,13 +580,15 @@ void PeleLM::ef_linesearch(const Real     &dt,
          }
          ls_its += 1;
          if ( ls_its >= max_ls_its ) {
-            done_linesearch = true;
             if ( obj_new > obj_full_step ) {
+               pnp_Utmp.setVal(0.0);
                MultiFab::Copy(pnp_Utmp,pnp_dU,0,0,2,0);
                pnp_Utmp.plus(pnp_U,0,2,Godunov::hypgrow());
                ef_NL_residual( dt, pnp_Utmp, pnp_res, false, true );
                pnp_res.mult(-1.0,0,2);
+               norm_res = ef_NL_norm(pnp_res);
             }
+            done_linesearch = true;
          }
          //done_linesearch = true;
       } while (!done_linesearch);
@@ -548,7 +597,7 @@ void PeleLM::ef_linesearch(const Real     &dt,
 
       // Update final solution/residual
       MultiFab::Copy(pnp_U,pnp_Utmp, 0, 0, 2, 0);
-      norm_res = ef_NL_norm(pnp_res);;
+      norm_res = ef_NL_norm(pnp_res);
       norm_U = ef_NL_norm(pnp_U);
 
 }
@@ -559,7 +608,7 @@ void PeleLM::test_exit_newton(const MultiFab &pnp_res,
                               const Real     &norm_res,
                                     bool     &exit_newton) {
 
-  const Real tol_Newton = pow(1.0e-13,2.0/3.0);
+  const Real tol_Newton = pow(1.0e-14,2.0/3.0);
   Real max_res = pnp_res.norm0();
   if ( max_res <= tol_Newton ) {
      exit_newton = true;
@@ -586,6 +635,8 @@ void PeleLM::ef_NL_residual(const Real      &dt,
 // Copy const pnp_U_in into local to unscale pnp_U
    MultiFab pnp_U(grids,dmap,2,Godunov::hypgrow());
    MultiFab::Copy(pnp_U, pnp_U_in, 0, 0, 2, Godunov::hypgrow());
+
+   pnp_res.setVal(0.0);
 
 // Unscale pnp_U.
    pnp_U.mult(pnp_SUne,0,1);
@@ -645,8 +696,8 @@ void PeleLM::ef_NL_residual(const Real      &dt,
 
 // Residual scaling
    if ( update_scaling ) {
-      pnp_SFne = (pnp_res.norm0(0) > 0.0) ? pnp_res.norm0(0) : 1.0 ;
-      pnp_SFphiV = (pnp_res.norm0(1) > 0.0) ? pnp_res.norm0(1) : 1.0 ;
+      pnp_SFne = (pnp_res.norm0(0) > 1.0e-12) ? pnp_res.norm0(0) : 1.0 ;
+      pnp_SFphiV = (pnp_res.norm0(1) > 1.0e-12) ? pnp_res.norm0(1) : 1.0 ;
       amrex::Print() << " F(ne) scaling: " << pnp_SFne << "\n";
       amrex::Print() << " F(PhiV) scaling: " << pnp_SFphiV << "\n";
    }
@@ -1000,11 +1051,11 @@ void PeleLM::ef_GMRES_solve(const Real      &dt,
       r.mult(1.0/norm_r);
       MultiFab::Copy(KspBase[0],r, 0 ,0, 2, 0);
 
-//    showMF("pnp",b_in,"pnp_b_In",level);
-//    showMF("pnp",r,"pnp_r0norm",level);
+//      showMF("pnp",b_in,"pnp_b_In",level);
+//      showMF("pnp",r,"pnp_r0norm",level);
 //    showMFsub("pnp1D",b_in,stripBox,"1Dpnp_GMRESb_in",level);
 //    showMFsub("pnp1D",r,stripBox,"1Dpnp_GMRESr0",level);
-      //amrex::Abort("Step debugging");
+//      amrex::Abort("Step debugging");
 
       int k = 0;
       int k_end;
@@ -1093,7 +1144,7 @@ void PeleLM::ef_GMRES_solve(const Real      &dt,
          }
 
          norm_r = fabs(g[k+1]);
-//       amrex::Print() << "   GMRES residual: " << norm_r/beta << "\n";
+//       amrex::Print() << "   GMRES end residual: " << norm_r/beta << "\n";
 
 //       Exit conditions. k_end used here to construct the update.
          if ( norm_r < rel_tol ) {
@@ -1193,8 +1244,9 @@ void PeleLM::ef_setUpPrecond (const Real      &dt,
 
 //    Define all three LinOps
       pnp_pc_Stilda.define({geom}, {grids}, {dmap}, info);
-      pnp_pc_diff.define({geom}, {grids}, {dmap}, info);
       pnp_pc_drift.define({geom}, {grids}, {dmap}, info);
+      info.setMaxCoarseningLevel(4);
+      pnp_pc_diff.define({geom}, {grids}, {dmap}, info);
       pnp_pc_Stilda.setMaxOrder(ef_PoissonMaxOrder);
       pnp_pc_diff.setMaxOrder(ef_PoissonMaxOrder);
       pnp_pc_drift.setMaxOrder(ef_PoissonMaxOrder);
@@ -1207,7 +1259,7 @@ void PeleLM::ef_setUpPrecond (const Real      &dt,
 //    Scalars includes the scaling of the Jacobian
       pnp_pc_diff.setScalars(-pnp_SUne/pnp_SFne, -dt*pnp_SUne/pnp_SFne, dt*pnp_SUne/pnp_SFne);
       //pnp_pc_diff.setScalars(-1.0, -dt, dt);
-      Real omega = 1.0;
+      Real omega = 0.5;
       pnp_pc_diff.setRelaxation(omega);
 //    Diagonal part
       MultiFab dummy(grids,dmap,1,1);
@@ -1300,13 +1352,13 @@ void PeleLM::ef_applyPrecond ( const int      &GMRES_ite,
    MLMG mg_drift(pnp_pc_drift);
    MLMG mg_Stilda(pnp_pc_Stilda);
    mg_diff.setMaxFmgIter(0);
-//   mg_diff.setBottomSolver(MLMG::BottomSolver::smoother);
-   mg_diff.setPreSmooth(2);
-   mg_diff.setPostSmooth(2);
-   mg_diff.setFinalSmooth(10);
-   mg_diff.setBottomSmooth(40);
-   mg_drift.setMaxFmgIter(20);
-   mg_Stilda.setMaxFmgIter(20);
+   mg_diff.setBottomSolver(MLMG::BottomSolver::smoother);
+   mg_diff.setPreSmooth(4);
+   mg_diff.setPostSmooth(1);
+   mg_diff.setFinalSmooth(30);
+   mg_diff.setBottomSmooth(50);
+//   mg_drift.setMaxFmgIter(20);
+ //  mg_Stilda.setMaxFmgIter(20);
    mg_diff.setMaxIter(ef_PoissonMaxIter);
 //   mg_diff.setFixedIter(15);
    mg_drift.setMaxIter(ef_PoissonMaxIter);
@@ -1316,7 +1368,7 @@ void PeleLM::ef_applyPrecond ( const int      &GMRES_ite,
    mg_drift.setVerbose(ef_PoissonVerbose);
    mg_Stilda.setVerbose(ef_PoissonVerbose);
 
-// showMF("pnp",v,"pnp_Pc_vIn",level);
+   showMF("pnp",v,"pnp_Pc_vIn",level,GMRES_ite);
 
 // Set-up solver tolerances
    Real S_tol     = ef_PC_MG_tol;
@@ -1330,6 +1382,7 @@ void PeleLM::ef_applyPrecond ( const int      &GMRES_ite,
 //     --                --
    mg_diff.solve({&PneComp_alias}, {&neComp_alias}, S_tol, S_tol_abs);
    MultiFab::Copy(Pv,v,1,1,1,0);
+// amrex::Abort("In applyPrecond !");
 // showMFsub("pnp1D",Pv,stripBox,"1DPC_Pv_AftM1",level);
 // showMF("pnp",Pv,"pnp_Pc_PvMat1",level);
 
@@ -1413,6 +1466,69 @@ PeleLM::ef_reactionRateRhoY_pphys(FArrayBox&       RhoYdot,
                        T.dataPtr(sCompT),             ARLIM(mcbx.loVect()), ARLIM(mcbx.hiVect()),
                        RhoYdot.dataPtr(sCompRhoYdot), ARLIM(mobx.loVect()), ARLIM(mobx.hiVect()));
 }
+
+void
+PeleLM::getSpeciesCharges(Vector<int> &spec_chrg)
+{
+    for (int i = 0; i < nspecies; i++) {
+        spec_chrg.push_back(pphys_get_spec_chrg(&i));
+    }
+}
+
+BCRec
+PeleLM::hack_bc_charged_spec(const int &charge,
+                             const BCRec &bc_in) {
+
+   BCRec bc_hacked;
+
+   const int* lo_bc = bc_in.lo();
+   const int* hi_bc = bc_in.hi();
+   for (int i = 0; i < AMREX_SPACEDIM; i++)
+   {
+      int lo = lo_bc[i];
+      int hi = hi_bc[i];
+      // 3 = EXT_DIR, 2 = FOEXTRAP
+      // Spec is In/Out and it's cathode (neg electrode)
+      if ( ( lo_bc[i] == 3 || lo_bc[i] == 2 ) &&
+           ( !phiV_lo_pol[i].compare("Cathode") ) ) {
+         if ( charge > 0 ) { // Outflow for cation
+            lo = 2;
+         } else { // Dirich = 0 for anion
+            lo = 3;
+         }
+      // Spec is In/Out and it's anode (pos electrode)
+      } else if ( ( lo_bc[i] == 3 || lo_bc[i] == 2 ) &&
+                  ( !phiV_lo_pol[i].compare("Anode") ) ) {
+         if ( charge > 0 ) { // Dirich = 0 for cation
+            lo = 3;
+         } else { // Outflow for anion
+            lo = 2;
+         }
+      }
+      // Spec is In/Out and it's cathode (neg electrode)
+      if ( ( hi_bc[i] == 3 || hi_bc[i] == 2 ) &&
+           ( !phiV_hi_pol[i].compare("Cathode") ) ) {
+         if ( charge > 0 ) { // Outflow for cation
+            hi = 2;
+         } else { // Dirich = 0 for anion
+            hi = 3;
+         }
+      // Spec is In/Out and it's anode (pos electrode)
+      } else if ( ( hi_bc[i] == 3 || hi_bc[i] == 2 ) &&
+                  ( !phiV_hi_pol[i].compare("Anode") ) ) {
+         if ( charge > 0 ) { // Dirich = 0 for cation
+            hi = 3;
+         } else { // Outflow for anion
+            hi = 2;
+         }
+      }
+      bc_hacked.setLo(i,lo);
+      bc_hacked.setHi(i,hi);
+   }
+
+   return bc_hacked;
+}
+
 
 void
 PeleLM::ef_calcLorentz(const Real      &time,
