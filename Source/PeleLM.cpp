@@ -5766,6 +5766,7 @@ PeleLM::advance_chemistry (MultiFab&       mf_old,
         for (MFIter mfi(mf_old,true); mfi.isValid(); ++mfi)
         {
             const Box& box = mfi.tilebox();
+#ifndef USE_EFIELD
             tmp.resize(box,nspecies+1);
             const FArrayBox& f = Force[mfi];
             tmp.copy(f,box,0,box,0,nspecies+1);
@@ -5775,6 +5776,17 @@ PeleLM::advance_chemistry (MultiFab&       mf_old,
             Snew.copy(Sold,box,first_spec,box,first_spec,nspecies+1);
             Snew.plus(tmp,box,box,0,first_spec,nspecies+1);
             Snew.copy(Sold,box,Temp,box,Temp,1);
+#else
+            tmp.resize(box,nspecies+2);
+            const FArrayBox& f = Force[mfi];
+            tmp.copy(f,box,0,box,0,nspecies+2);
+            tmp.mult(dt,box,0,nspecies+2);
+            FArrayBox& Sold = mf_old[mfi];
+            FArrayBox& Snew = mf_new[mfi];
+            Snew.copy(Sold,box,first_spec,box,first_spec,nspecies+2);
+            Snew.plus(tmp,box,box,0,first_spec,nspecies+2);
+            Snew.copy(Sold,box,Temp,box,Temp,1);
+#endif
         }
     }
   }
