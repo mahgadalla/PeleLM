@@ -6611,8 +6611,15 @@ PeleLM::mac_sync ()
     Real offset = 0.0;
 
     BL_PROFILE_VAR("HT::mac_sync::ucorr", HTUCORR);
-    mac_projector->mac_sync_solve(level,dt,rh,fine_ratio,
-                                  &chi_sync,subtract_avg,offset);
+    Array<MultiFab*,AMREX_SPACEDIM> Ucorr;
+    for (int idim = 0; idim < AMREX_SPACEDIM; ++idim){
+      const BoxArray& edgeba = getEdgeBoxArray(idim);
+      //
+      // fixme? unsure how many ghost cells...
+      Ucorr[idim]= new MultiFab(edgeba,dmap,1,0,MFInfo(),Factory());
+    }
+    mac_projector->mac_sync_solve(level,dt,rh,fine_ratio,Ucorr,
+                                  &chi_sync);
     BL_PROFILE_VAR_STOP(HTUCORR);
 
     if (closed_chamber && level == 0)
@@ -6649,7 +6656,7 @@ PeleLM::mac_sync ()
     BL_PROFILE_VAR("HT::mac_sync::Vsync", HTVSYNC);
     if (do_mom_diff == 0) 
     {
-      mac_projector->mac_sync_compute(level,u_mac,Vsync,Ssync,rho_half,
+      mac_projector->mac_sync_compute(level,Ucorr,u_mac,Vsync,Ssync,rho_half,
                                       (level > 0) ? &getAdvFluxReg(level) : 0,
                                       advectionType,prev_time,
                                       prev_pres_time,dt,NUM_STATE,
@@ -6665,7 +6672,7 @@ PeleLM::mac_sync ()
       {
         if (sync_scheme[comp]==UseEdgeState)
         {
-          mac_projector->mac_sync_compute(level,Vsync,comp,
+          mac_projector->mac_sync_compute(level,Ucorr,Vsync,comp,
                                           comp,EdgeState, comp,rho_half,
                                           (level > 0 ? &getAdvFluxReg(level):0),
                                           advectionType,modify_reflux_normal_vel,dt,
@@ -6695,7 +6702,7 @@ PeleLM::mac_sync ()
         // Note: the density component now contains (delta rho)^sync since there
         // is no diffusion for this term
         //
-        mac_projector->mac_sync_compute(level,Ssync,comp,s_ind,
+        mac_projector->mac_sync_compute(level,Ucorr,Ssync,comp,s_ind,
                                         EdgeState,comp,rho_half,
                                         (level > 0 ? &getAdvFluxReg(level):0),
                                         advectionType,modify_reflux_normal_vel,dt,
