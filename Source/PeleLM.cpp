@@ -206,6 +206,7 @@ int  PeleLM::ef_max_GMRES_rst;
 Real PeleLM::ef_GMRES_reltol;
 int  PeleLM::ef_GMRES_size;
 Real PeleLM::ef_PC_MG_tol;
+bool PeleLM::ef_use_hypre_PCdiff;
 #endif  
 
 
@@ -6096,7 +6097,17 @@ PeleLM::compute_scalar_advection_fluxes_and_divergence (const MultiFab& Force,
     state_bc = fetchBCArray(State_Type,bx,first_spec,nspecies+1);
 
     // Note that the FPU argument is no longer used in IAMR->Godunov.cpp because FPU is now default
-#ifndef USE_EFIELD	  
+#ifdef USE_EFIELD	  
+    godunov->AdvectScalarsEfield(bx, dx, dt, 
+                                 D_DECL(  area[0][S_mfi],       area[1][S_mfi],        area[2][S_mfi]),
+                                 D_DECL( u_mac[0][S_mfi],      u_mac[1][S_mfi],       u_mac[2][S_mfi]),
+                                 D_DECL( Udrift_spec[0][S_mfi], Udrift_spec[1][S_mfi], Udrift_spec[2][S_mfi]),
+                                 D_DECL( cflux[0],      cflux[1],      cflux[2]),
+                                 D_DECL( cfluxDrift[0], cfluxDrift[1], cfluxDrift[2]),
+                                 D_DECL( edgstate[0],   edgstate[1],   edgstate[2]),
+                                 Smf[S_mfi], 0, nspecies+1 , force, 0, divu, 0,
+                                 (*aofs)[S_mfi], first_spec, advectionType, state_bc, FPU, volume[S_mfi]);
+#else
     godunov->AdvectScalars(bx, dx, dt, 
                            D_DECL(  area[0][S_mfi],  area[1][S_mfi],  area[2][S_mfi]),
                            D_DECL( u_mac[0][S_mfi], u_mac[1][S_mfi], u_mac[2][S_mfi]),
@@ -6104,16 +6115,6 @@ PeleLM::compute_scalar_advection_fluxes_and_divergence (const MultiFab& Force,
                            D_DECL(edgstate[0],edgstate[1],edgstate[2]),
                            Smf[S_mfi], 0, nspecies+1 , force, 0, divu, 0,
                            (*aofs)[S_mfi], first_spec, advectionType, state_bc, FPU, volume[S_mfi]);
-#else
-    godunov->AdvectScalarsEfield(bx, dx, dt, 
-                                 D_DECL(  area[0][S_mfi],       area[1][S_mfi],        area[2][S_mfi]),
-                                 D_DECL( u_mac[0][S_mfi],       u_mac[1][S_mfi],       u_mac[2][S_mfi]),
-                                 D_DECL( Udrift_spec[0][S_mfi], Udrift_spec[1][S_mfi], Udrift_spec[2][S_mfi]),
-                                 D_DECL( cflux[0],      cflux[1],      cflux[2]),
-                                 D_DECL( cfluxDrift[0], cfluxDrift[1], cfluxDrift[2]),
-                                 D_DECL( edgstate[0],   edgstate[1],   edgstate[2]),
-                                 Smf[S_mfi], 0, nspecies+1 , force, 0, divu, 0,
-                                 (*aofs)[S_mfi], first_spec, advectionType, state_bc, FPU, volume[S_mfi]);
 #endif
        
     // Accumulate rho flux divergence, rho on edges, and rho flux on edges
