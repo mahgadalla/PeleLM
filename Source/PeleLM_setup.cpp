@@ -308,7 +308,7 @@ static
 int
 ne_bc[] =
 {
-  INT_DIR, EXT_DIR, FOEXTRAP, REFLECT_EVEN, REFLECT_EVEN, EXT_DIR, EXT_DIR
+  INT_DIR, EXT_DIR, FOEXTRAP, REFLECT_EVEN, REFLECT_EVEN, REFLECT_EVEN, EXT_DIR, EXT_DIR
 };
 // PhiV bc : 0 = Interior = INT_DIR, 1 = Dirichlet = EXT_DIR, 2 = Neumann = REFLECT_EVEN,
 static
@@ -707,7 +707,9 @@ PeleLM::variableSetUp ()
 
 #ifdef USE_EFIELD
     amrex::Print() << " index for species electron " << iE_sp << std::endl;
+    bcs.resize(1);
     set_ne_bc(bc,phys_bc);
+    bcs[1] = hack_bc_charged_spec(-1,bc);
     desc_lst.setComponent(State_Type,nE,"nE",bc,BndryFunc(ne_fill));
 
     set_phiv_bc(bc,phiV_bc);
@@ -1041,6 +1043,19 @@ PeleLM::variableSetUp ()
 
   derive_lst.add("efieldy",IndexType::TheCellType(),1,derefieldy,grow_box_by_one);
   derive_lst.addComponent("efieldy",desc_lst,State_Type,PhiV,1);
+
+  //
+  //  Lorentz forces
+  //
+  derive_lst.add("LorentzFx",IndexType::TheCellType(),1,derlorentzfx,grow_box_by_one);
+  derive_lst.addComponent("LorentzFx",desc_lst,State_Type,PhiV,1);
+  derive_lst.addComponent("LorentzFx",desc_lst,State_Type,nE,1);
+  derive_lst.addComponent("LorentzFx",desc_lst,State_Type,first_spec,nspecies);
+
+  derive_lst.add("LorentzFy",IndexType::TheCellType(),1,derlorentzfy,grow_box_by_one);
+  derive_lst.addComponent("LorentzFy",desc_lst,State_Type,PhiV,1);
+  derive_lst.addComponent("LorentzFy",desc_lst,State_Type,nE,1);
+  derive_lst.addComponent("LorentzFy",desc_lst,State_Type,first_spec,nspecies);
 
 #if (BL_SPACEDIM == 3)
   derive_lst.add("efieldz",IndexType::TheCellType(),1,derefieldz,grow_box_by_one);

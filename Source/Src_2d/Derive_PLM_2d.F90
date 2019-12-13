@@ -30,7 +30,7 @@ module derive_PLM_2D
             dertransportcoeff
 
 #ifdef USE_EFIELD  
-  public :: derchargedist, derefieldx, derefieldy
+  public :: derchargedist, derefieldx, derefieldy, derlorentzfx, derlorentzfy
 #endif
 
 contains
@@ -959,7 +959,7 @@ contains
 
      IMPLICIT NONE
 
-!    Gradient of electric potential in X direction 
+!    Gradient of electric potential in Y direction 
      integer lo(2), hi(2)
      integer DIMDEC(ef)
      integer DIMDEC(dat)
@@ -991,11 +991,7 @@ contains
      integer    i,j
      REAL_T     d
 
-#if (BL_PRVERSION == 9)
-     d = half
-#else
      d = half/dx
-#endif
 
      if (dir .eq. 0) then
         do j = lo(2), hi(2)
@@ -1049,7 +1045,85 @@ contains
        enddo
     enddo
 
-  END SUBROUTINE derchargedist
+   END SUBROUTINE derchargedist
+
+   SUBROUTINE derlorentzfx ( e, DIMS(e), nv, dat, DIMS(dat),ncomp, &
+                            lo,hi,domlo,domhi,delta,xlo,time,dt,bc, & 
+                            level,grid_no) bind(C, name="derlorentzfx")
+
+     USE mod_Fvar_def, ONLY : zk, CperECharge
+     use network,      only : nspec
+
+     IMPLICIT NONE
+
+!    Lorentz forces in X direction 
+     integer lo(2), hi(2)
+     integer DIMDEC(e)
+     integer DIMDEC(dat)
+     integer domlo(2), domhi(2)
+     integer nv, ncomp
+     integer bc(2,2,ncomp)
+     REAL_T  delta(2), xlo(2), time, dt
+     REAL_T  e(DIMV(e),nv)
+     REAL_T  dat(DIMV(dat),ncomp)
+     integer level, grid_no
+
+     REAL_T  :: efieldx(DIMV(e),1)  
+     integer :: phi, nE, fS
+     integer :: i, j
+
+     phi = 1
+     nE  = 2
+     fS  = 3
+
+     CALL FORT_EFIELD_DIR ( dat(:,:,phi), DIMS(dat), efieldx, DIMS(e), lo, hi, 0, delta(1) )    
+
+     do j=lo(2),hi(2)
+        do i=lo(1),hi(1)
+           e(i,j,1) = (SUM(zk(1:nspec) * dat(i,j,fS:fS+nspec-1)) - dat(i,j,nE) * CperECharge) * efieldx(i,j,1)
+        enddo
+     enddo
+
+   END SUBROUTINE derlorentzfx
+
+   SUBROUTINE derlorentzfy ( e, DIMS(e), nv, dat, DIMS(dat),ncomp, &
+                            lo,hi,domlo,domhi,delta,xlo,time,dt,bc, & 
+                            level,grid_no) bind(C, name="derlorentzfy")
+
+     USE mod_Fvar_def, ONLY : zk, CperECharge
+     use network,      only : nspec
+
+     IMPLICIT NONE
+
+!    Lorentz forces in X direction 
+     integer lo(2), hi(2)
+     integer DIMDEC(e)
+     integer DIMDEC(dat)
+     integer domlo(2), domhi(2)
+     integer nv, ncomp
+     integer bc(2,2,ncomp)
+     REAL_T  delta(2), xlo(2), time, dt
+     REAL_T  e(DIMV(e),nv)
+     REAL_T  dat(DIMV(dat),ncomp)
+     integer level, grid_no
+
+     REAL_T  :: efieldy(DIMV(e),1)  
+     integer :: phi, nE, fS
+     integer :: i, j
+
+     phi = 1
+     nE  = 2
+     fS  = 3
+
+     CALL FORT_EFIELD_DIR ( dat(:,:,phi), DIMS(dat), efieldy, DIMS(e), lo, hi, 1, delta(2) )    
+
+     do j=lo(2),hi(2)
+        do i=lo(1),hi(1)
+           e(i,j,1) = (SUM(zk(1:nspec) * dat(i,j,fS:fS+nspec-1)) - dat(i,j,nE) * CperECharge) * efieldy(i,j,1)
+        enddo
+     enddo
+
+   END SUBROUTINE derlorentzfy
 #endif
 
 end module derive_PLM_2D
