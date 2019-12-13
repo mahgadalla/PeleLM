@@ -25,6 +25,7 @@
    static int                  ef_GMRES_size;
    static amrex::Real          ef_PC_MG_tol;
    static int                  ef_max_NK_ite;
+   static bool                 ef_use_hypre_PCdiff; 
 
 // PNP Data
    amrex::MultiFab             kappaSpec_cc;
@@ -54,6 +55,8 @@
    amrex::Real                 pnp_SFphiV;
    amrex::Real                 pnp_SUne;
    amrex::Real                 pnp_SUphiV;
+
+   int                         MGitcount;
 
 // Functions
    static void ef_init();
