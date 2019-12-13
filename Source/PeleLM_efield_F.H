@@ -27,7 +27,11 @@
   void ef_elec_mobility(const int* lo, const int* hi,
                         const amrex::Real* tempdat, ARLIM_P(tlo),   ARLIM_P(thi),
                         const amrex::Real* rhoYdat, ARLIM_P(rylo),  ARLIM_P(ryhi),
-                        const amrex::Real* phiVdat, ARLIM_P(plo),   ARLIM_P(phi),
+                        const amrex::Real* xgradPhi, ARLIM_P(xgradPhilo), ARLIM_P(xgradPhihi),
+                        const amrex::Real* ygradPhi, ARLIM_P(ygradPhilo), ARLIM_P(ygradPhihi),
+#if AMREX_SPACEDIM == 3
+                        const amrex::Real* zgradPhi, ARLIM_P(zgradPhilo), ARLIM_P(zgradPhihi),
+#endif
                         amrex::Real* kpedat,        ARLIM_P(kpelo), ARLIM_P(kpehi));
 
 // Get electron diffusivity D_e fron Einstein relation for now
