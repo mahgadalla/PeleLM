@@ -2987,7 +2987,8 @@ contains
   subroutine ef_elec_mobility(lo,hi, &
                               T, DIMS(T), &
                               rhoY, DIMS(rhoY), &
-                              phiV, DIMS(phiV), &
+                              xgradPhi, DIMS(xgradPhi), &
+                              ygradPhi, DIMS(ygradPhi), &
                               kp_e, DIMS(kp_e)) &
                               bind(C, name="ef_elec_mobility")
 
@@ -2998,14 +2999,17 @@ contains
     integer :: lo(dim),hi(dim)
     integer :: DIMDEC(T)
     integer :: DIMDEC(rhoY)
-    integer :: DIMDEC(phiV)
+    integer :: DIMDEC(xgradPhi)
+    integer :: DIMDEC(ygradPhi)
     integer :: DIMDEC(kp_e)
     REAL_T  :: T(DIMV(T))
     REAL_T  :: rhoY(DIMV(rhoY),nspec)
-    REAL_T  :: phiV(DIMV(phiV))
+    REAL_T  :: xgradPhi(DIMV(xgradPhi))
+    REAL_T  :: ygradPhi(DIMV(ygradPhi))
     REAL_T  :: kp_e(DIMV(kp_e))
 
     integer :: i, j
+    REAL_T  :: c, Ef, EoverN, N
 
     do j = lo(2), hi(2)
       do i = lo(1), hi(1)
@@ -3066,7 +3070,7 @@ contains
                                      bg_chrg, DIMS(bg_chrg), &
                                      dt) bind(C, name="ef_calc_chargedist_prov")
 
-  USE mod_Fvar_def, ONLY : zk, CperECharge
+  USE mod_Fvar_def, ONLY : zk, CperECharge, spec_charge
   use network,      only : nspec
 
   implicit none
@@ -3095,11 +3099,14 @@ contains
   do j = lo(2), hi(2)
     do i = lo(1), hi(1)
       do k = 1, nspec
-        rhoYprov(k) = rhoY_old(i,j,k) + dt * ( AofS(i,j,k) + &
-                                               0.5d0 * ( Dn(i,j,k) - Dnp1(i,j,k) ) + &
-                                               Dhat(i,j,k) + &
-                                               I_R(i,j,k) )
-        rhoYprov(k) = MAX(rhoYprov(k),0.0d0) ! TODO : is this clip necessary ??
+        rhoYprov(k) = 0.0d0
+        if ( spec_charge(k) /= 0 ) then
+           rhoYprov(k) = rhoY_old(i,j,k) + dt * ( AofS(i,j,k) + &
+                                                  0.5d0 * ( Dn(i,j,k) - Dnp1(i,j,k) ) + &
+                                                  Dhat(i,j,k) + &
+                                                  I_R(i,j,k) )
+           rhoYprov(k) = MAX(rhoYprov(k),0.0d0) ! TODO : is this clip necessary ??
+        end if
       enddo
       bg_chrg(i,j) = SUM(zk(1:nspec) * rhoYprov(1:nspec)) / CperECharge
     end do
@@ -3238,8 +3245,8 @@ contains
     REAL_T  :: Ux_eff, Uy_eff
     REAL_T  :: Ux_max, Uy_max
 
-    Ux_max = 0.0d0
-    Uy_max = 0.0d0
+    Ux_max = 1.0d-12
+    Uy_max = 1.0d-12
 
     do j=lo(2),hi(2)
        do i=lo(1),hi(1)
