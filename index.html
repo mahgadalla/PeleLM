@@ -57,67 +57,28 @@
     </section><!-- Two -->
     <section id="two" class="wrapper style2 special">
       <div class="container">
-	<header class="major">
-	  <h2>Getting Started</h2>
-	</header>
-	<!-- <section class="profiles"> -->
-	  <ul class="alt">
-	    <li><h3><span class="icon fa-download"></span> Clone</h3>
-	      <pre>
-git clone https://github.com/AMReX-Codes/amrex.git
-git clone https://github.com/AMReX-Codes/IAMR.git
-git clone https://github.com/AMReX-Combustion/PelePhysics.git
-git clone https://github.com/AMReX-Combustion/PeleLM.git
-              </pre>
-	    </li>
-
-	    <li><h3><span class="icon fa-cogs"></span> Setup Your Environment</h3>
-	      <pre>
-export AMREX_HOME=/path/to/AMReX
-export IAMR_HOME=/path/to/IAMR
-export PELE_PHYSICS_HOME=/path/to/PelePhysics
-export PELELM_HOME=/path/to/PeleLM
-              </pre>
-	    </li>
-
-	    <li><h3><span class="icon fa-magic"></span> Compile</h3>
-	      problems are compiled in their own directory.  E.g.,
-	      <pre>
-cd PeleLM/Exec/FlameInABox/
-make DIM=2 COMP=gnu DEBUG=FALSE USE_MPI=TRUE
-              </pre>
-	    </li>
-
-	    <li><h3><span class="icon fa-laptop"></span> Run</h3>
-	      To run a simulation, an input file
-	      is always required:
-	      <pre> mpiexec -n 2 ./PeleLM2d.gnu.MPI.ex inputs.2d-regt</pre>
-	    </li>
-
-	    <li><h3><span class="icon fa-image"></span> Visualize</h3>
-	      AMReX output is supported natively by 
-              <a href="http://yt-project.org/">yt</a>,
-              <a href="https://wci.llnl.gov/simulation/computer-codes/visit/">VisIt</a>,
-              <a href="https://github.com/AMReX-Codes/Amrvis">Amrvis</a>,
-              and <a href="https://www.paraview.org/">ParaView</a>.
-	    </li>
-
-	  </ul>
-        <!-- </section> -->
-	<footer>
-          
-
-	  <p>The PeleLM User's Guide is currently in the PeleLM/UsersGuide directory.<br>
-            The AMReX <a href="https://amrex-codes.github.io/amrex/docs_html">Documentation</a>
-            is the best place to learn more about how the AMReX source code is organized.<br>
-            You can also ask for help by opening up an issue on the 
-            <a href="https://github.com/AMReX-Combustion/PeleLM">PeleLM GitHub webpage</a>.</p>
-	  <ul class="actions">
-	    <li>
-	      <a href="https://github.com/AMReX-Combustion/PeleLM" class="button big">Get PeleLM</a>
+	<ul class="alt">
+          <li><h3>Getting Started</h3>
+            <p>
+              PeleLM depends on several separate GitHub repositories, each under active development.  This
+              can significantly complicate the required effort to keep all the required software up to date and internally
+              compatible.  Recently, we moved the Pele codes to a new software management style based on git "submodules",
+              which dramatically simplifies the initial install/build/run procedure:
+            </p>
+	    <pre>
+              git clone --recursive https://github.com/AMReX-Combustion/PeleProduction.git
+              cd PeleLMruns/FlameSheet2D
+              make -j 12
+              mpiexec -np 8 ./PeleLM2d.gnu.MPI.ex inputs.2d-regt
+            </pre>
+            <p>
+              The <a href="https://pelelm.readthedocs.io/en/latest/index.html">PeleLM User's Guide</a>
+              continues to be the best place to learn more about the code.
+              You can also ask for help by opening up an issue on the 
+              <a href="https://github.com/AMReX-Combustion/PeleLM">PeleLM GitHub webpage</a>.
+            </p>
 	    </li>
 	  </ul>
-	</footer>
       </div>
     </section>
 
