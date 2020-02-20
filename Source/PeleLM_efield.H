@@ -24,6 +24,7 @@
    static amrex::Real          ef_GMRES_reltol;
    static int                  ef_GMRES_size;
    static amrex::Real          ef_PC_MG_tol;
+   static int                  ef_PC_MG_fixedIte;
    static int                  ef_max_NK_ite;
    static bool                 ef_use_hypre_PCdiff; 
 
