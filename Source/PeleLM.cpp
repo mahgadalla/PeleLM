@@ -206,6 +206,7 @@ int  PeleLM::ef_max_GMRES_rst;
 Real PeleLM::ef_GMRES_reltol;
 int  PeleLM::ef_GMRES_size;
 Real PeleLM::ef_PC_MG_tol;
+int  PeleLM::ef_PC_MG_fixedIte;
 bool PeleLM::ef_use_hypre_PCdiff;
 #endif  
 
@@ -997,6 +998,7 @@ showMFsub(const std::string&   mySet,
     }
 
     FArrayBox sub(box,mf.nComp());
+    sub.setVal(0.0);
 
     mf.copyTo(sub,0,0,mf.nComp(),0);
 
@@ -5973,6 +5975,7 @@ PeleLM::advance_chemistry (MultiFab&       mf_old,
 
 #ifdef USE_EFIELD
 //  amrex::Print() << React_new.nComp() << " " << Force.nComp() << " " << nspecies << "\n";
+    React_new.setVal(0.0,iE_sp,1,0);
     MultiFab::Copy(React_new, mf_old, nE, nspecies, 1, 0);
     MultiFab::Subtract(React_new, mf_new, nE, nspecies, 1, 0);
     React_new.mult(-1/dt,nspecies,1,0);
