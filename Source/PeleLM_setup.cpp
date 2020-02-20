@@ -709,8 +709,8 @@ PeleLM::variableSetUp ()
     amrex::Print() << " index for species electron " << iE_sp << std::endl;
     bcs.resize(1);
     set_ne_bc(bc,phys_bc);
-    bcs[1] = hack_bc_charged_spec(-1,bc);
-    desc_lst.setComponent(State_Type,nE,"nE",bc,BndryFunc(ne_fill));
+    bcs[0] = hack_bc_charged_spec(-1,bc);
+    desc_lst.setComponent(State_Type,nE,"nE",bcs[0],BndryFunc(ne_fill));
 
     set_phiv_bc(bc,phiV_bc);
     desc_lst.setComponent(State_Type,PhiV,"PhiV",bc,BndryFunc(phiv_fill));
