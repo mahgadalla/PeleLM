@@ -1173,7 +1173,7 @@ contains
 
     use network,          only : nspec
     use transport_module, only : get_transport_coeffs
-    use mod_Fvar_def, only : Pr, Sc, LeEQ1, thickFac
+    use mod_Fvar_def, only : Pr, Sc, LeEQ1, thickFac, iE_sp
     
     implicit none
 
@@ -1261,6 +1261,7 @@ contains
             CALL CKMMWY(Y_real(i,j,k,:),Wavg)
             do n=1,nspec
               rhoD(i,j,k,n) = Wavg * invmwt(n) * D(i,j,k,n)  * 1.0d-1 
+              if ( n == iE_sp ) rhoD(i,j,k,n) = 0.0d0
             end do
             if (do_temp .ne. 0) then 
               rhoD(i,j,k,nspec+1) = LAM(i,j,k) * (one / 100000.0D0)
@@ -2968,14 +2969,11 @@ contains
     REAL_T  :: kp_sp(DIMV(kp_sp),nspec)
 
     integer :: i, j
-    REAL_T :: Wbar, rho, oneoverdenom
-    REAL_T, DIMENSION(1:Nspec) :: Y
+    REAL_T :: rho, oneoverdenom
 
     do j = lo(2), hi(2)
       do i = lo(1), hi(1)
         rho = SUM(rhoY(i,j,:))
-        Y(:) = rhoY(i,j,:)/rho
-        CALL CKMMWY(Y(:),Wbar)
         oneoverdenom = 1.0d0 / ( rho * pphys_getRuniversal() * T(i,j) )
         kp_sp(i,j,:) = rhoD(i,j,:) * 1000.0d0 / invmwt(:) * zk(:) * oneoverdenom
         kp_sp(i,j,iE_sp) = 0.0d0
