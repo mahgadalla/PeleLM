@@ -4858,52 +4858,68 @@ PeleLM::flux_divergence (MultiFab&        fdiv,
 {
   BL_ASSERT(fdiv.nComp() >= fdivComp+nComp);
 
-  amrex::FabArray<amrex::BaseFab<int>>  mask;
-  mask.define(grids, dmap,  1, 0);
-#ifdef AMREX_USE_EB
-  mask.copy(ebmask);
-#else
-  mask.setVal(1.0);
-#endif
+//   amrex::FabArray<amrex::BaseFab<int>>  mask;
+//   mask.define(grids, dmap,  1, 0);
+// #ifdef AMREX_USE_EB
+//   mask.copy(ebmask);
+// #else
+//   mask.setVal(1.0);
+// #endif
 
-#ifdef _OPENMP
-#pragma omp parallel
-#endif
-  for (MFIter mfi(fdiv,true); mfi.isValid(); ++mfi)
-  {
-    const Box& box = mfi.tilebox();
-    FArrayBox& fab = fdiv[mfi];
-    const BaseFab<int>& fab_mask = mask[mfi];
-#ifdef AMREX_USE_EB    
-    const FArrayBox& vfrac = (*volfrac)[mfi];
-#endif
+// #ifdef _OPENMP
+// #pragma omp parallel
+// #endif
+//   for (MFIter mfi(fdiv,true); mfi.isValid(); ++mfi)
+//   {
+//     const Box& box = mfi.tilebox();
+//     FArrayBox& fab = fdiv[mfi];
+//     const BaseFab<int>& fab_mask = mask[mfi];
+// #ifdef AMREX_USE_EB    
+//     const FArrayBox& vfrac = (*volfrac)[mfi];
+// #endif
 
-    flux_div( BL_TO_FORTRAN_BOX(box),
-              BL_TO_FORTRAN_N_ANYD(fab,fdivComp),
-              BL_TO_FORTRAN_N_ANYD(fab_mask,0),
-              BL_TO_FORTRAN_N_ANYD((*f[0])[mfi],fluxComp),
-              BL_TO_FORTRAN_N_ANYD((*f[1])[mfi],fluxComp),
-#if ( AMREX_SPACEDIM == 3 )
-              BL_TO_FORTRAN_N_ANYD((*f[2])[mfi],fluxComp),
-#endif
-              BL_TO_FORTRAN_ANYD(volume[mfi]),
-#ifdef AMREX_USE_EB
-              BL_TO_FORTRAN_ANYD(vfrac),
-#endif
-              &nComp, &scale);
+//     flux_div( BL_TO_FORTRAN_BOX(box),
+//               BL_TO_FORTRAN_N_ANYD(fab,fdivComp),
+//               BL_TO_FORTRAN_N_ANYD(fab_mask,0),
+//               BL_TO_FORTRAN_N_ANYD((*f[0])[mfi],fluxComp),
+//               BL_TO_FORTRAN_N_ANYD((*f[1])[mfi],fluxComp),
+// #if ( AMREX_SPACEDIM == 3 )
+//               BL_TO_FORTRAN_N_ANYD((*f[2])[mfi],fluxComp),
+// #endif
+//               BL_TO_FORTRAN_ANYD(volume[mfi]),
+// #ifdef AMREX_USE_EB
+//               BL_TO_FORTRAN_ANYD(vfrac),
+// #endif
+//               &nComp, &scale);
         
-  }
+//   }
+
+
+    AMREX_D_TERM(MultiFab flxx(*f[0], amrex::make_alias, fluxComp, nComp);,
+		 MultiFab flxy(*f[1], amrex::make_alias, fluxComp, nComp);,
+		 MultiFab flxz(*f[2], amrex::make_alias, fluxComp, nComp););
+    Array<const MultiFab*,AMREX_SPACEDIM> f_a{AMREX_D_DECL(&flxx,&flxy,&flxz)};
+    MultiFab fdiv_a(fdiv, amrex::make_alias, fdivComp, nComp);
   
-#ifdef AMREX_USE_EB    
+#ifndef AMREX_USE_EB
+
+    computeDivergence(fdiv_a, f_a, geom);
+
+#else
+    // fluxes are on centroids
+    EB_computeDivergence(fdiv_a, f_a, geom, true);  
     {
-      MultiFab fdiv_SrcGhostCell(grids,dmap,nComp,fdiv.nGrow()+2,MFInfo(),Factory());
+      MultiFab fdiv_SrcGhostCell(grids,dmap,nComp,2,MFInfo(),Factory());
       fdiv_SrcGhostCell.setVal(0.);
       fdiv_SrcGhostCell.copy(fdiv, fdivComp, 0, nComp);
       amrex::single_level_weighted_redistribute( 0, {fdiv_SrcGhostCell}, {fdiv}, *volfrac, fdivComp, nComp, {geom} );
     }
-    EB_set_covered(fdiv,0.);
+    // redist set covered to some large val. Want to make sure we're not using
+    // covered cells in any computation.
+    //EB_set_covered(fdiv,0.);
 #endif
-  
+
+    fdiv.mult(scale);
   
 }
 
@@ -8042,6 +8058,7 @@ PeleLM::differential_spec_diffuse_sync (Real dt,
     // is this right? - I'm not sure what the scaling on SpecDiffusionFluxnp1 is
     Real scale = -dt;
 
+    //FIXME! - use amrex div funs...
     // take divergence of (delta gamma) and put it in update
     // update = scale * div(flux) / vol
     // we want update to contain (dt/2) div (delta gamma)
