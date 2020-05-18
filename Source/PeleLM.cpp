@@ -208,6 +208,7 @@ int  PeleLM::ef_GMRES_size;
 Real PeleLM::ef_PC_MG_tol;
 int  PeleLM::ef_PC_MG_fixedIte;
 bool PeleLM::ef_use_hypre_PCdiff;
+bool PeleLM::ef_use_PETSC_direct;
 #endif  
 
 
@@ -5240,7 +5241,7 @@ PeleLM::advance (Real time,
     // compute A
     BL_PROFILE_VAR_START(HTADV);
     aofs->setVal(1.e30,aofs->nGrow());
-    compute_scalar_advection_fluxes_and_divergence(Forcing,mac_divu,dt);
+    compute_scalar_advection_fluxes_and_divergence(Forcing,mac_divu,sdc_iter,dt);
     BL_PROFILE_VAR_STOP(HTADV);
     showMF("sdc",*aofs,"sdc_A_pred",level,sdc_iter,parent->levelSteps(level));
 
@@ -5320,7 +5321,9 @@ PeleLM::advance (Real time,
 #ifdef USE_EFIELD
 	 Forcing.setVal(0.0,nspecies+1,1,0);
 	 MultiFab ForcingNe_al(Forcing,amrex::make_alias,nspecies+1,1);
+    showMF("pnp",S_new,"pnp_Snew_BefPNP",level,sdc_iter,parent->levelSteps(level));
 	 ef_solve_PNP(sdc_iter, dt, time, Dn, Dnp1, Dhat, ForcingNe_al);
+    showMF("pnp",S_new,"pnp_Snew_AftPNP",level,sdc_iter,parent->levelSteps(level));
 #endif
 
     //
@@ -6029,6 +6032,7 @@ PeleLM::advance_chemistry (MultiFab&       mf_old,
 void
 PeleLM::compute_scalar_advection_fluxes_and_divergence (const MultiFab& Force,
                                                         const MultiFab& DivU,
+                                                        const int       sdc_iter,
                                                         Real            dt)
 {
   BL_PROFILE("HT::comp_sc_adv_fluxes_and_div()");
@@ -6069,6 +6073,8 @@ PeleLM::compute_scalar_advection_fluxes_and_divergence (const MultiFab& Force,
   FArrayBox cflux[BL_SPACEDIM];
 #ifdef USE_EFIELD  
   FArrayBox cfluxDrift[BL_SPACEDIM];
+  showMF("pnp",Udrift_spec[0],"pnp_UdrSpecX_",level,sdc_iter,parent->levelSteps(level));
+  showMF("pnp",Udrift_spec[1],"pnp_UdrSpecY_",level,sdc_iter,parent->levelSteps(level));
 #endif
   FArrayBox edgstate[BL_SPACEDIM];
   Vector<int> state_bc;
