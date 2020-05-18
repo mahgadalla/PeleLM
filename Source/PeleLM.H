@@ -8,6 +8,11 @@
 #include <AMReX_MLMG.H>
 #include <AMReX_MLABecCecLaplacian.H>
 #include <AMReX_MLABecLaplacian.H>
+#if defined(AMREX_USE_PETSC)
+#include <petscksp.h>
+#include <PETScSolver.H>
+#include <PETScBndry.H>
+#endif
 #endif
 
 #include <list>
@@ -365,6 +370,7 @@ private:
 
   void compute_scalar_advection_fluxes_and_divergence (const amrex::MultiFab& Force,
                                                        const amrex::MultiFab& divu,
+                                                       const int              sdc_iter,
                                                        amrex::Real            dt);
 
   void compute_vel_visc (amrex::Real      time,
