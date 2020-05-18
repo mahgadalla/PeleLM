@@ -27,6 +27,7 @@
    static int                  ef_PC_MG_fixedIte;
    static int                  ef_max_NK_ite;
    static bool                 ef_use_hypre_PCdiff; 
+   static bool                 ef_use_PETSC_direct;
 
 // PNP Data
    amrex::MultiFab             kappaSpec_cc;
@@ -106,6 +107,12 @@
                        const amrex::MultiFab  &res,
                              amrex::MultiFab  &dU,
                              int              &nGMRES);
+
+// PETSC direct solve function
+   void ef_PETSC_solve(const amrex::Real      &dt,
+                       const amrex::MultiFab  &U,
+                       const amrex::MultiFab  &res,
+                             amrex::MultiFab  &dU);
 
 // J times v function
    void ef_JtV(const amrex::Real      &dt,
