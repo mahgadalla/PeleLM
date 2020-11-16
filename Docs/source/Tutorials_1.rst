@@ -460,7 +460,7 @@ Then provide a definition of the new refinement critera in the `REFINEMENT CONTR
     amr.flame_tracer.value_greater = 1.0e-6
     amr.flame_tracer.field_name    = Y(CH3O)
 
-The first line simply declares a set of refinement indicators which are subsequently defined. For each indicator, the user can provide a limit up to which AMR level this indicator will be used to refine. Then there are multiple possibilities to specify the actual criterion: ``value_greater``, ``value_less``, ``vorticity_greater`` or ``adjacent_difference_greater``. In each case, the user specify a threshold value and the name of variable on which it applies (except for the ``vorticity_greater``). In the example above, the grid is refined up to level 1 at the location wheres the temperature is above 800 K or where the temperature difference between adjacent cells exceed 200 K. These two criteria were used up to that point. The last indicator will now enable to add level 2 grid patches at location where the flame tracer (`Y(CH3O)`) is above 3.0e-6.
+The first line simply declares a set of refinement indicators which are subsequently defined. For each indicator, the user can provide a limit up to which AMR level this indicator will be used to refine. Then there are multiple possibilities to specify the actual criterion: ``value_greater``, ``value_less``, ``vorticity_greater`` or ``adjacent_difference_greater``. In each case, the user specify a threshold value and the name of variable on which it applies (except for the ``vorticity_greater``). In the example above, the grid is refined up to level 1 at the location wheres the temperature is above 800 K or where the temperature difference between adjacent cells exceed 200 K. These two criteria were used up to that point. The last indicator will now enable to add level 2 grid patches at location where the flame tracer (`Y(CH3O)`) is above 1.0e-6.
 
 With these new parameters, update the `checkpoint` file from which to restart: ::
 
@@ -469,6 +469,41 @@ With these new parameters, update the `checkpoint` file from which to restart: :
 and increase the ``max_step`` to 2300 and start the simulation again ! ::
 
     mpirun -n 4 ./PeleLM2d.gnu.MPI.ex inputs.2d-regt > log3Levels.dat &
+
+Visualization of the 3-levels simulation results indicates that the flame front is now better repesented on the fine grid, but there are still only a couple of cells across the flame front thickness. The flame tip velocity, captured in the `AC_history`, also exhibits a significant change with the addition of the third level (even past the initial transient). In the present case, the flame tip velocity is our main quantity of interest and we will now add another refinement level to ensure that this quantity is fairly well capture. We will use the same refinement indicators and simply update the ``max_level`` as well as the level at which each refinement criteria is used: ::
+
+    amr.max_level       = 3          # maximum level number allowed
+    
+    ...
+    
+    amr.restart           = chk02300 # Restart from checkpoint ?
+    
+    ...
+    
+    amr.gradT.max_level                   = 2
+
+    ...
+    
+    amr.flame_tracer.max_level     = 3
+    
+and increase the ``max_step`` to 2600. The temporal evolution of the inlet velocity also shows that our active control parameters induce rather strong oscillations of the velocity before it settles. To illustrate how we can tune the AC parameters to limit this behavior, we will increase the ``tau`` parameter: ::
+
+    active_control.tau = 4.0e-4            # Control tau (should ~ 10 dt)
+
+Let's start the simulation again ! ::
+
+    mpirun -n 4 ./PeleLM2d.gnu.MPI.ex inputs.2d-regt > log4Levels.dat &
+
+Finally, we will now improve `PeleLM algorithm accuracy itself. So far, for computational expense reasons, we have only used a single SDC iteration which provide a relatively weak coupling between the slow advection and the fast diffusion/reaction processes, as well as a loose enforcement of the velocity divergence constrain (see `PeleLM description <https://pelelm.readthedocs.io/en/latest/Model.html>`_ for more information). We will now increase the number of SDC iteration to two, allowing to reach the theoretical second order convergence property of the algorithm: ::
+
+   #--------------------NUMERICS CONTROL------------------------
+    ...
+    ns.sdc_iterMAX    = 2             # Number of SDC iterations
+
+and further continue the simulation to reach 2800 time steps. Note that, as with an increase of the maximum refinement level, increasing the number of SDC iterations incurs a significant increase of the computational time per coarse time step. Let's complete this final step: ::
+
+   mpirun -n 4 ./PeleLM2d.gnu.MPI.ex inputs.2d-regt > log4Levels_2SDC.dat &
+
 
 Analysis
 -----------------------
