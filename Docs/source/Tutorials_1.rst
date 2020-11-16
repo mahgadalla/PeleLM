@@ -283,7 +283,7 @@ The maximum number of time steps is set to 1 for now, while the final simulation
 Input/output from `PeleLM` are specified in the ``IO CONTROL`` block: ::
 
     #-------------------------IO CONTROL----------------------------
-    #amr.restart           = chk02000 # Restart from checkpoint ?
+    #amr.restart           = chk01000 # Restart from checkpoint ?
     #amr.regrid_on_restart = 1        # Perform regriding upon restart ?
     amr.checkpoint_files_output = 0   # Dump check file ? 0: no, 1: yes
     amr.check_file      = chk         # root name of checkpoint file
@@ -310,7 +310,7 @@ Whether you have used one or the other command, within 30 s you should obtain a 
 Running the problem on a coarse grid
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-As mentioned above, the initial solution is relatively far from the steady-state triple flame we wish to obtain. An inexpensive and rapid way to transition from the initial solution to an established triple flame is to perform a coarse (using only 2 AMR levels) simulation using a single SDC iteration for a few initial number of time steps (here we start with 2000). To do so, update (or verify !) these associated keywords in the ``input.2d-regt``: ::
+As mentioned above, the initial solution is relatively far from the steady-state triple flame we wish to obtain. An inexpensive and rapid way to transition from the initial solution to an established triple flame is to perform a coarse (using only 2 AMR levels) simulation using a single SDC iteration for a few initial number of time steps (here we start with 1000). To do so, update (or verify !) these associated keywords in the ``input.2d-regt``: ::
 
     #-------------------------AMR CONTROL----------------------------
     ...
@@ -318,7 +318,7 @@ As mentioned above, the initial solution is relatively far from the steady-state
     ...
     #----------------------TIME STEPING CONTROL----------------------
     ...
-    max_step          = 2000          # maximum number of time steps
+    max_step          = 1000          # maximum number of time steps
     ...
     #--------------------NUMERICS CONTROL------------------------
     ...
@@ -343,7 +343,7 @@ An animation of the flame evolution during this initial transient is provided in
 
 .. _fig:InitTransient:
 
-.. table:: Temperature (left) and divu (right) fields from 0 to 2000 iterations (0-?? ms).
+.. table:: Temperature (left) and divu (right) fields from 0 to 2000 time steps (0-?? ms).
      :align: center
 
      +-----+
@@ -365,11 +365,11 @@ The parameters of the active control are listed in ``INPUTS TO ACTIVE CONTROL``b
     active_control.on = 1                  # Use AC ?
     active_control.use_temp = 1            # Default in fuel mass, rather use iso-T position ?
     active_control.temperature = 1400.0    # Value of iso-T ?
-    active_control.tau = 5.0e-5            # Control tau (should ~ 10 dt)
+    active_control.tau = 1.0e-4            # Control tau (should ~ 10 dt)
     active_control.height = 0.01           # Where is the flame held ? Default assumes coordinate along Y in 2D or Z in 3D.
     active_control.v = 1                   # verbose
     active_control.velMax = 2.0            # Optional: limit inlet velocity
-    active_control.changeMax = 0.2         # Optional: limit inlet velocity changes (absolute)
+    active_control.changeMax = 0.1         # Optional: limit inlet velocity changes (absolute)
     active_control.flameDir  = 1           # Optional: flame main direction. Default: AMREX_SPACEDIM-1
     active_control.pseudo_gravity = 1      # Optional: add density proportional force to compensate for the acceleration 
                                            #           of the gas due to inlet velocity changes
@@ -381,23 +381,23 @@ The ``pseudo_gravity`` triggers a manufactured force added to the momemtum equat
 
 Once these paremeters are set, you continue the previous simulation by uncommenting the first two lines of the ``IO CONTROL`` block in the input file: ::
 
-    amr.restart           = chk02000 # Restart from checkpoint ?
+    amr.restart           = chk01000 # Restart from checkpoint ?
     amr.regrid_on_restart = 1        # Perform regriding upon restart ?
 
-The first line provides the last `checkpoint` file generated during the first simulation performed for 2000 time steps. Note that the second line, forcing regriding of the simulation upon restart, is not essential at this point. Finally, update the ``max_step`` to allow the simulation to proceed further: ::
+The first line provides the last `checkpoint` file generated during the first simulation performed for 1000 time steps. Note that the second line, forcing regriding of the simulation upon restart, is not essential at this point. Finally, update the ``max_step`` to allow the simulation to proceed further: ::
 
     #----------------------TIME STEPING CONTROL----------------------
     ...
-    max_step          = 2400          # maximum number of time steps
+    max_step          = 2000          # maximum number of time steps
 
-You are now ready launch `PeleLM` again for another 400 time steps ! ::
+You are now ready launch `PeleLM` again for another 1000 time steps ! ::
 
     mpirun -n 4 ./PeleLM2d.gnu.MPI.ex inputs.2d-regt > logCheckControl.dat &
 
 As the simulation proceeds, an ASCII file tracking the flame position and inlet velocity (as well as other control variables) is generated: ``AC_History``. You can follow the motion of the flame tip by plotting the eigth column against the first one (flame tip vs. time step count). If `gnuplot` is available on your computer, use the following to obtain the graphs of Fig :numref:`fig:ACcontrol`: ::
 
     gnuplot
-    plot "AC_History" u 1:8 w lp
+    plot "AC_History" u 1:7 w lp
     plot "AC_History" u 1:3 w lp
     exit
     
@@ -408,7 +408,7 @@ The second plot corresponds to the inlet velocity.
 
 .. _fig:ACcontrol:
 
-.. table:: Flame tip position (left) and inlet velocity (right) as function of time step count from 2000 to 2400 step using the inlet velocity control.
+.. table:: Flame tip position (left) and inlet velocity (right) as function of time step count from 1000 to 2000 step using the inlet velocity control.
      :align: center
 
      +-----+
