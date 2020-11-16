@@ -359,7 +359,7 @@ flame blow-off or flashback. In the present configuration, the position of the f
 at each time step (using an isoline of temperature) and the input velocity is adjusted to maintain 
 its location at a fixed distance from the inlet (1 cm in the present case). 
 
-The parameters of the active control are listed in ``INPUTS TO ACTIVE CONTROL``block of ``inputs.2d-regt``: ::
+The parameters of the active control are listed in `INPUTS TO ACTIVE CONTROL` block of ``inputs.2d-regt``: ::
 
     # --------------  INPUTS TO ACTIVE CONTROL  -----------------
     active_control.on = 1                  # Use AC ?
@@ -432,14 +432,14 @@ We also clearly see square unsmooth shapes in the field of intermediate species,
 
 .. _fig:CoarseField:
 
-.. table:: Flame tip position (left) and inlet velocity (right) as function of time step count from 2000 to 2400 step using the inlet velocity control.
+.. table:: Details of the triple flame tip obtained with the initial coarse 2-level mesh.
      :align: center
 
      +-----+
      | |f| |
      +-----+
 
-Our first level of refinement must specifically target the reactive layer of the flame. As seen from Fig. :numref:`fig:CoarseField`, one can choose from several variables to reach that goal. In the following, we will use the HCO species as a tracer of the flame position. Start by increasing the number of AMR levels by one in the `AMR CONTROL` block: ::
+Our first level of refinement must specifically target the reactive layer of the flame. As seen from Fig. :numref:`fig:CoarseField`, one can choose from several variables to reach that goal. In the following, we will use the CH3O species as a tracer of the flame position. Start by increasing the number of AMR levels by one in the `AMR CONTROL` block: ::
 
     amr.max_level       = 2          # maximum level number allowed
 
@@ -453,20 +453,20 @@ Then provide a definition of the new refinement critera in the `REFINEMENT CONTR
     amr.hi_temp.field_name    = temp
     
     amr.gradT.max_level                   = 1 
-    amr.gradT.adjacent_difference_greater = 300 
+    amr.gradT.adjacent_difference_greater = 200 
     amr.gradT.field_name                  = temp
     
     amr.flame_tracer.max_level     = 2 
-    amr.flame_tracer.value_greater = 3.0e-6
-    amr.flame_tracer.field_name    = Y(HCO)
+    amr.flame_tracer.value_greater = 1.0e-6
+    amr.flame_tracer.field_name    = Y(CH3O)
 
-The first line simply declares a set of refinement indicators which are subsequently defined. For each indicator, the user can provide a limit up to which AMR level this indicator will be used to refine. Then there are multiple possibilities to specify the actual criterion: ``value_greater``, ``value_less``, ``vorticity_greater`` or ``adjacent_difference_greater``. In each case, the user specify a threshold value and the name of variable on which it applies (except for the ``vorticity_greater``). In the example above, the grid is refined up to level 1 at the location wheres the temperature is above 800 K or where the temperature difference between adjacent cells exceed 300 K. These two criteria were used up to that point. The last indicator will now enable to add level 2 grid patches at location where the flame tracer (`Y(HCO)`) is above 3.0e-6.
+The first line simply declares a set of refinement indicators which are subsequently defined. For each indicator, the user can provide a limit up to which AMR level this indicator will be used to refine. Then there are multiple possibilities to specify the actual criterion: ``value_greater``, ``value_less``, ``vorticity_greater`` or ``adjacent_difference_greater``. In each case, the user specify a threshold value and the name of variable on which it applies (except for the ``vorticity_greater``). In the example above, the grid is refined up to level 1 at the location wheres the temperature is above 800 K or where the temperature difference between adjacent cells exceed 200 K. These two criteria were used up to that point. The last indicator will now enable to add level 2 grid patches at location where the flame tracer (`Y(CH3O)`) is above 3.0e-6.
 
 With these new parameters, update the `checkpoint` file from which to restart: ::
 
-    amr.restart           = chk02400 # Restart from checkpoint ?
+    amr.restart           = chk02000 # Restart from checkpoint ?
 
-and increase the ``max_step`` to 2600 and start the simulation again ! ::
+and increase the ``max_step`` to 2300 and start the simulation again ! ::
 
     mpirun -n 4 ./PeleLM2d.gnu.MPI.ex inputs.2d-regt > log3Levels.dat &
 
