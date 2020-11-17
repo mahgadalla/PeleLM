@@ -494,7 +494,7 @@ Let's start the simulation again ! ::
 
     mpirun -n 4 ./PeleLM2d.gnu.MPI.ex inputs.2d-regt > log4Levels.dat &
 
-Finally, we will now improve `PeleLM algorithm accuracy itself. So far, for computational expense reasons, we have only used a single SDC iteration which provide a relatively weak coupling between the slow advection and the fast diffusion/reaction processes, as well as a loose enforcement of the velocity divergence constrain (see `PeleLM description <https://pelelm.readthedocs.io/en/latest/Model.html>`_ for more information). We will now increase the number of SDC iteration to two, allowing to reach the theoretical second order convergence property of the algorithm: ::
+Finally, we will now improve `PeleLM` algorithm accuracy itself. So far, for computational expense reasons, we have only used a single SDC iteration which provide a relatively weak coupling between the slow advection and the fast diffusion/reaction processes, as well as a loose enforcement of the velocity divergence constrain (see `PeleLM description <https://pelelm.readthedocs.io/en/latest/Model.html>`_ for more information). We will now increase the number of SDC iteration to two, allowing to reach the theoretical second order convergence property of the algorithm: ::
 
    #--------------------NUMERICS CONTROL------------------------
     ...
@@ -504,6 +504,21 @@ and further continue the simulation to reach 2800 time steps. Note that, as with
 
    mpirun -n 4 ./PeleLM2d.gnu.MPI.ex inputs.2d-regt > log4Levels_2SDC.dat &
 
+Figure :numref:`fig:ACcontrol_full` shows the entire history of the inlet velocity starting when the AC was activated (1000th time step). We can see that every change in the numerical setup induced a slight change in the triple flame propagation velocity, eventually leading to a nearly constant value, sufficient for the purpose of this tutorial.
+
+.. |g| image:: ./Visualization/ACcontrol_complete.png
+     :width: 100%
+
+.. _fig:ACcontrol_full:
+
+.. table:: Inlet velocity history during the successive simulations performed during this tutorial.
+     :align: center
+
+     +-----+
+     | |g| |
+     +-----+
+
+At this point, the simulation is considered complete and the next section provide some pointer to further analyze the results.
 
 Analysis
 -----------------------
